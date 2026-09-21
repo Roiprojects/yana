@@ -1,4 +1,4 @@
-﻿import { Link } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { ArrowRight, CalendarDays, Clock, Globe2, MapPin, ArrowUpRight } from "lucide-react";
 import { Section } from "@/components/ui/section";
 import { Reveal } from "@/components/ui/reveal";
@@ -134,15 +134,10 @@ export function UpcomingToursSection() {
   return (
     <Section className="relative bg-[linear-gradient(180deg,#faf6ed,#fffdf8)] py-16 sm:py-24">
       <Reveal>
-        <div className="mb-10 flex flex-wrap items-end justify-between gap-5 sm:mb-14">
-          <div className="max-w-xl">
-            <div className="flex items-center gap-2 mb-3">
-              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#0b66e4]/10 text-[#0b66e4]">
-                <CalendarDays className="h-4 w-4" />
-              </span>
-              <p className="eyebrow text-[#ad7f19]">Curated Departures</p>
-            </div>
-            <h2 className="text-3xl font-extrabold tracking-tight text-[#10213a] sm:text-4xl md:text-5xl">
+        <div className="mb-6 flex flex-wrap items-end justify-between gap-3 sm:mb-8">
+          <div>
+            <p className="eyebrow text-[#ad7f19]">Curated Departures</p>
+            <h2 className="mt-1 text-xl font-bold tracking-tight text-[#10213a] sm:text-2xl md:text-3xl">
               Upcoming Premium Tours
             </h2>
           </div>
