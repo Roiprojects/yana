@@ -7,7 +7,12 @@ import {
   Landmark,
   Globe2,
   LucideIcon,
+  MapPin,
+  ChevronDown,
+  Users2,
+  Sparkles,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { Reveal } from "@/components/ui/reveal";
 
 export interface ThemeCollection {
@@ -17,6 +22,7 @@ export interface ThemeCollection {
   href: string;
   icon: LucideIcon;
   images: string[];
+  scope: "all" | "domestic" | "international";
 }
 
 export const curatedThemesData: ThemeCollection[] = [
@@ -30,6 +36,7 @@ export const curatedThemesData: ThemeCollection[] = [
       "/themes/theme-mountains.jpg",
       "/themes/theme-mountains-2.jpg",
     ],
+    scope: "domestic",
   },
   {
     title: "Beaches & Islands",
@@ -41,6 +48,7 @@ export const curatedThemesData: ThemeCollection[] = [
       "/themes/theme-beaches.jpg",
       "/themes/theme-beaches-2.jpg",
     ],
+    scope: "international",
   },
   {
     title: "Heritage & Pilgrimage",
@@ -52,6 +60,7 @@ export const curatedThemesData: ThemeCollection[] = [
       "/themes/theme-heritage.jpg",
       "/themes/theme-heritage-2.jpg",
     ],
+    scope: "domestic",
   },
   {
     title: "International Escapes",
@@ -63,6 +72,7 @@ export const curatedThemesData: ThemeCollection[] = [
       "/themes/theme-international.jpg",
       "/themes/theme-international-2.jpg",
     ],
+    scope: "international",
   },
 ];
 
@@ -174,6 +184,27 @@ function ThemeCarouselCard({
 }
 
 export function CuratedThemes() {
+  const [selectedScope, setSelectedScope] = useState<"all" | "domestic" | "international">("all");
+  const [browseDropdownOpen, setBrowseDropdownOpen] = useState(false);
+  const browseDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (
+        browseDropdownRef.current &&
+        !browseDropdownRef.current.contains(event.target as Node)
+      ) {
+        setBrowseDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const displayedThemes = selectedScope === "all" 
+    ? curatedThemesData 
+    : curatedThemesData.filter(theme => theme.scope === selectedScope);
+
   return (
     <>
       {/* Section Header */}
@@ -185,18 +216,166 @@ export function CuratedThemes() {
               Journeys arranged for every kind of traveller
             </h2>
           </div>
-          <Link
-            to="/packages"
-            className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline sm:text-sm"
-          >
-            View all packages <ArrowUpRight className="h-4 w-4" />
-          </Link>
+          
+          {/* Action Controls: Domestic/International Filter Pills + Advanced Dropdown */}
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Segmented Filter Pills (All / Domestic / International) */}
+            <div className="inline-flex items-center rounded-full border border-[#e8decb] bg-white p-1 shadow-sm backdrop-blur-md">
+              <button
+                type="button"
+                onClick={() => setSelectedScope("all")}
+                className={cn(
+                  "rounded-full px-3.5 py-1.5 text-xs font-bold transition-all duration-200",
+                  selectedScope === "all"
+                    ? "bg-primary text-white shadow-[0_8px_18px_-6px_rgba(11,102,228,0.6)]"
+                    : "text-text-secondary hover:text-deep",
+                )}
+              >
+                All
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedScope("domestic")}
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-bold transition-all duration-200",
+                  selectedScope === "domestic"
+                    ? "bg-primary text-white shadow-[0_8px_18px_-6px_rgba(11,102,228,0.6)]"
+                    : "text-text-secondary hover:text-deep",
+                )}
+              >
+                <MapPin className="h-3.5 w-3.5" />
+                Domestic
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedScope("international")}
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-bold transition-all duration-200",
+                  selectedScope === "international"
+                    ? "bg-primary text-white shadow-[0_8px_18px_-6px_rgba(11,102,228,0.6)]"
+                    : "text-text-secondary hover:text-deep",
+                )}
+              >
+                <Globe2 className="h-3.5 w-3.5" />
+                International
+              </button>
+            </div>
+
+            {/* Advanced Browse Dropdown Menu */}
+            <div ref={browseDropdownRef} className="relative">
+              <button
+                type="button"
+                onClick={() => setBrowseDropdownOpen((v) => !v)}
+                className="inline-flex items-center gap-2 rounded-full border border-primary/25 bg-gradient-to-r from-primary to-[#0052cc] px-4 py-2 text-xs font-bold text-white shadow-[0_10px_22px_-8px_rgba(11,102,228,0.55)] transition-all duration-200 hover:shadow-[0_14px_28px_-8px_rgba(11,102,228,0.7)] hover:scale-[1.02] focus:outline-none sm:text-sm"
+                aria-expanded={browseDropdownOpen}
+              >
+                <span>Browse Packages</span>
+                <ChevronDown
+                  className={cn(
+                    "h-4 w-4 text-white/90 transition-transform duration-200",
+                    browseDropdownOpen && "rotate-180",
+                  )}
+                />
+              </button>
+
+              {browseDropdownOpen && (
+                <div className="absolute right-0 top-full z-40 mt-2 w-72 origin-top-right overflow-hidden rounded-2xl border border-border-soft bg-white/98 p-2 shadow-[0_26px_56px_-18px_rgba(16,33,58,0.32)] backdrop-blur-xl animate-in fade-in zoom-in-95 duration-150">
+                  <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-[#ad7f19]">
+                    Explore Destinations
+                  </div>
+
+                  <Link
+                    to="/packages?scope=domestic"
+                    onClick={() => setBrowseDropdownOpen(false)}
+                    className="group flex items-center gap-3 rounded-xl px-3 py-2.5 transition-colors hover:bg-lavender"
+                  >
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary transition-colors group-hover:bg-primary group-hover:text-white">
+                      <MapPin className="h-4 w-4" />
+                    </span>
+                    <div className="min-w-0">
+                      <div className="text-xs font-bold text-deep transition-colors group-hover:text-primary">
+                        Domestic Tours
+                      </div>
+                      <div className="text-[11px] text-text-secondary">
+                        India & Himalayan Journeys
+                      </div>
+                    </div>
+                  </Link>
+
+                  <Link
+                    to="/packages?scope=international"
+                    onClick={() => setBrowseDropdownOpen(false)}
+                    className="group flex items-center gap-3 rounded-xl px-3 py-2.5 transition-colors hover:bg-lavender"
+                  >
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary transition-colors group-hover:bg-primary group-hover:text-white">
+                      <Globe2 className="h-4 w-4" />
+                    </span>
+                    <div className="min-w-0">
+                      <div className="text-xs font-bold text-deep transition-colors group-hover:text-primary">
+                        International Tours
+                      </div>
+                      <div className="text-[11px] text-text-secondary">
+                        Europe, Bali, Dubai & Beyond
+                      </div>
+                    </div>
+                  </Link>
+
+                  <Link
+                    to="/group-tours"
+                    onClick={() => setBrowseDropdownOpen(false)}
+                    className="group flex items-center gap-3 rounded-xl px-3 py-2.5 transition-colors hover:bg-lavender"
+                  >
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary transition-colors group-hover:bg-primary group-hover:text-white">
+                      <Users2 className="h-4 w-4" />
+                    </span>
+                    <div className="min-w-0">
+                      <div className="text-xs font-bold text-deep transition-colors group-hover:text-primary">
+                        Group Departures
+                      </div>
+                      <div className="text-[11px] text-text-secondary">
+                        Escorted Social Departures
+                      </div>
+                    </div>
+                  </Link>
+
+                  <Link
+                    to="/customized-tours"
+                    onClick={() => setBrowseDropdownOpen(false)}
+                    className="group flex items-center gap-3 rounded-xl px-3 py-2.5 transition-colors hover:bg-lavender"
+                  >
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary transition-colors group-hover:bg-primary group-hover:text-white">
+                      <Sparkles className="h-4 w-4" />
+                    </span>
+                    <div className="min-w-0">
+                      <div className="text-xs font-bold text-deep transition-colors group-hover:text-primary">
+                        Customized Packages
+                      </div>
+                      <div className="text-[11px] text-text-secondary">
+                        Tailor-Made Private Trips
+                      </div>
+                    </div>
+                  </Link>
+
+                  <div className="mt-1 border-t border-border-soft/60 pt-1">
+                    <Link
+                      to="/packages"
+                      onClick={() => setBrowseDropdownOpen(false)}
+                      className="flex items-center justify-between rounded-xl px-3 py-2 text-xs font-bold text-primary transition-colors hover:bg-primary/8"
+                    >
+                      <span>View All Packages</span>
+                      <ArrowUpRight className="h-4 w-4" />
+                    </Link>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </Reveal>
 
-      {/* 4-Card Alignment with Modern Luxury Glassmorphic Design */}
+      {/* Grid Alignment with Modern Luxury Glassmorphic Design */}
       <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-        {curatedThemesData.map((collection, index) => (
+        {displayedThemes.map((collection, index) => (
           <ThemeCarouselCard
             key={collection.title}
             collection={collection}
