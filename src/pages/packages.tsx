@@ -89,25 +89,26 @@ export function PackagesPage() {
       <Section>
         <div className="grid gap-8 lg:grid-cols-[290px_1fr]">
           <aside className="space-y-6">
-            <div className="rounded-[1.8rem] border border-[#eadfcf] bg-[linear-gradient(135deg,#fffefb,#f7f1e4)] p-6 shadow-[0_22px_48px_-34px_rgba(16,33,58,0.24)]">
-              <div className="mb-4 flex items-center gap-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-[1rem] bg-primary text-white shadow-[0_16px_26px_-16px_rgba(11,102,228,0.8)]">
-                  <Layers3 className="h-5 w-5" aria-hidden />
+            <div className="sticky top-24 rounded-[2.5rem] border border-white/80 bg-white/40 p-6 sm:p-8 shadow-[0_24px_64px_-24px_rgba(16,33,58,0.12)] backdrop-blur-2xl">
+              <div className="mb-6 flex items-center gap-4 border-b border-[#10213a]/10 pb-6">
+                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[1.25rem] bg-gradient-to-br from-[#10213a] to-[#051024] text-[#f8d77f] shadow-[0_16px_32px_-10px_rgba(16,33,58,0.7)]">
+                  <Layers3 className="h-6 w-6" aria-hidden />
                 </div>
                 <div>
-                  <p className="text-sm font-bold uppercase tracking-[0.18em] text-[#ad7f19]">
-                    Filters
-                  </p>
-                  <p className="text-sm text-text-secondary">
-                    Narrow the collection by travel style.
+                  <h2 className="text-xl font-bold tracking-tight text-[#10213a]">
+                    Filter Tours
+                  </h2>
+                  <p className="text-xs font-semibold text-[#10213a]/50 uppercase tracking-widest mt-1">
+                    Refine journey
                   </p>
                 </div>
               </div>
+
               {hasFilter ? (
-                <div className="mb-5">
+                <div className="mb-6 overflow-hidden rounded-2xl">
                   <Link
                     to="/packages"
-                    className="text-sm font-semibold text-primary hover:underline"
+                    className="block w-full bg-red-50/80 px-4 py-3 text-center text-xs font-bold uppercase tracking-wider text-red-600 transition-colors hover:bg-red-100 hover:text-red-700"
                   >
                     Clear all filters
                   </Link>
@@ -115,14 +116,15 @@ export function PackagesPage() {
               ) : null}
 
               <FilterGroup
-                label="Scope"
+                label="Destination Scope"
                 options={scopeOptions}
                 activeValue={scope}
                 current={searchParams}
                 paramKey="scope"
               />
+              <div className="my-6 h-px w-full bg-gradient-to-r from-transparent via-[#10213a]/10 to-transparent" />
               <FilterGroup
-                label="Type"
+                label="Travel Style"
                 options={typeOptions}
                 activeValue={type}
                 current={searchParams}
@@ -205,9 +207,11 @@ function FilterGroup({
   paramKey: "scope" | "type";
 }) {
   return (
-    <div className="mb-5 last:mb-0">
-      <p className="mb-3 text-sm font-semibold text-deep">{label}</p>
-      <div className="flex flex-wrap gap-2">
+    <div>
+      <h3 className="mb-4 text-xs font-bold uppercase tracking-[0.2em] text-[#10213a]/50">
+        {label}
+      </h3>
+      <div className="flex flex-col gap-2">
         {options.map((opt) => {
           const active = activeValue === opt.value;
           return (
@@ -215,13 +219,16 @@ function FilterGroup({
               key={opt.value}
               to={buildHref(current, paramKey, opt.value)}
               className={cn(
-                "rounded-full border px-3.5 py-1.5 text-xs font-semibold transition-all duration-200",
+                "group flex items-center justify-between rounded-xl px-4 py-3 text-sm font-bold transition-all duration-300",
                 active
-                  ? "border-primary bg-primary text-white shadow-[0_10px_22px_-14px_rgba(11,102,228,0.8)]"
-                  : "border-[#eadfcf] bg-white text-text-secondary hover:border-[#dbc498] hover:text-primary",
+                  ? "bg-gradient-to-r from-[#0b66e4] to-[#0052cc] text-white shadow-[0_10px_24px_-10px_rgba(11,102,228,0.8)]"
+                  : "bg-white/60 text-[#10213a] hover:-translate-y-0.5 hover:bg-white hover:shadow-[0_8px_20px_-12px_rgba(16,33,58,0.15)]",
               )}
             >
-              {opt.label}
+              <span>{opt.label}</span>
+              {active && (
+                <span className="flex h-2 w-2 rounded-full bg-white shadow-[0_0_10px_rgba(255,255,255,0.8)]" />
+              )}
             </Link>
           );
         })}
