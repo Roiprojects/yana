@@ -8,8 +8,6 @@ import {
   Compass,
   Wrench,
   Check,
-  Globe2,
-  MapPin,
 } from "lucide-react";
 import { Container } from "@/components/ui/container";
 import { Section } from "@/components/ui/section";
