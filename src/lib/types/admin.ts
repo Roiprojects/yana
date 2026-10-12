@@ -38,6 +38,7 @@ export type EditablePackage = {
   scope: "domestic" | "international";
   tour_type: "group" | "customized";
   category_name: string | null;
+  theme_name?: string | null;
   destination_name: string | null;
   country: string | null;
   duration_days: number | null;
@@ -49,9 +50,22 @@ export type EditablePackage = {
   price_amount: string | number | null;
   taxes_info: string | null;
   hero_image_url: string | null;
+  source_pdf?: string | null;
   is_featured: boolean;
   is_active: boolean;
   status: "draft" | "published";
+};
+
+export type AdminThemeRow = {
+  id: string;
+  title: string;
+  tag: string;
+  blurb: string;
+  href: string;
+  image_url: string;
+  scope: "all" | "domestic" | "international";
+  is_active: boolean;
+  sort_order: number;
 };
 
 export type AdminDestinationRow = {
@@ -122,6 +136,8 @@ export type AdminHeroRow = {
   id: string;
   title: string;
   subtitle: string | null;
+  video_url?: string | null;
+  mobile_video_url?: string | null;
   image_url: string;
   cta_primary_text: string | null;
   cta_primary_link: string | null;

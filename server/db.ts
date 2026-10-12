@@ -4,20 +4,31 @@ import { Pool, type QueryResultRow } from "pg";
  * Shared Postgres connection pool (client's roiclients Postgres).
  * Server-only — never import this into the Vite/React bundle.
  * Reads DATABASE_URL from the environment (.env, git-ignored).
+ * Pool is lazily created and cached per DATABASE_URL value so that
+ * a restart (tsx watch) picks up new env vars without leaking connections.
  */
-const globalForPg = globalThis as unknown as { _pgPool?: Pool };
+const globalForPg = globalThis as unknown as {
+  _pgPool?: Pool;
+  _pgPoolUrl?: string;
+};
 
 function getPool(): Pool | null {
   const url = process.env.DATABASE_URL;
   if (!url) return null;
+  // If the DATABASE_URL changed (e.g., tsx watch reload), recreate the pool.
+  if (globalForPg._pgPool && globalForPg._pgPoolUrl !== url) {
+    void globalForPg._pgPool.end().catch(() => {});
+    globalForPg._pgPool = undefined;
+  }
   if (!globalForPg._pgPool) {
     globalForPg._pgPool = new Pool({
       connectionString: url,
       max: 5,
       idleTimeoutMillis: 30_000,
-      connectionTimeoutMillis: 10_000,
-      // Server has SSL disabled; keep it off. (Enable when the host supports TLS.)
+      connectionTimeoutMillis: 15_000,
+      ssl: false,
     });
+    globalForPg._pgPoolUrl = url;
   }
   return globalForPg._pgPool;
 }

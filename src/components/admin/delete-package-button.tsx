@@ -7,9 +7,11 @@ import { api } from "@/lib/api/client";
 export function DeletePackageButton({
   id,
   title,
+  onDeleted,
 }: {
   id: string;
   title: string;
+  onDeleted?: () => void;
 }) {
   const navigate = useNavigate();
   const [confirming, setConfirming] = useState(false);
@@ -19,7 +21,11 @@ export function DeletePackageButton({
     setPending(true);
     try {
       await api.deletePackage(id);
-      navigate("/admin/packages");
+      if (onDeleted) {
+        onDeleted();
+      } else {
+        navigate("/admin/packages");
+      }
     } catch (err) {
       alert((err as Error).message);
     } finally {

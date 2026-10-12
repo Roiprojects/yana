@@ -14,7 +14,7 @@ import { api } from "@/lib/api/client";
 export interface FieldDef {
   name: string;
   label: string;
-  type: "text" | "textarea" | "select" | "number" | "image" | "checkbox";
+  type: "text" | "textarea" | "select" | "number" | "image" | "video" | "checkbox";
   options?: { label: string; value: string }[];
   placeholder?: string;
   defaultValue?: string | number | boolean;
@@ -341,6 +341,46 @@ export function CrudManager<T extends { id: string; is_active?: boolean }>({
                             {currentImg}
                           </span>
                         )}
+                      </div>
+                    </div>
+                  );
+                }
+
+                if (f.type === "video") {
+                  const currentVideo = imageUrls[f.name] || (val as string) || "";
+                  return (
+                    <div key={f.name}>
+                      <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
+                        {f.label}
+                      </label>
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="text"
+                          name={f.name}
+                          defaultValue={currentVideo}
+                          placeholder={f.placeholder}
+                          onChange={(e) =>
+                            setImageUrls((prev) => ({
+                              ...prev,
+                              [f.name]: e.target.value,
+                            }))
+                          }
+                          className="flex-1 rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                        />
+                        <label className="cursor-pointer inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 transition shrink-0">
+                          {uploadingField === f.name ? (
+                            <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                          ) : (
+                            <Upload className="h-4 w-4 text-primary" />
+                          )}
+                          {uploadingField === f.name ? "Uploading…" : "Upload MP4"}
+                          <input
+                            type="file"
+                            accept="video/*"
+                            className="hidden"
+                            onChange={(e) => handleImageUpload(f.name, e)}
+                          />
+                        </label>
                       </div>
                     </div>
                   );

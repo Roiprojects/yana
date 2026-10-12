@@ -25,6 +25,7 @@ import { query, hasDb } from "./db.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 
+app.set("trust proxy", 1);
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json({ limit: "2mb" }));
 
@@ -48,18 +49,23 @@ const wrap =
   };
 
 // ── Auth ─────────────────────────────────────────────────────────────────────
+// Gracefully handle GET requests to /api/auth/login by redirecting to the admin login UI
+app.get("/api/auth/login", (_req, res) => {
+  res.redirect("/admin/login");
+});
+
 app.post(
   "/api/auth/login",
   wrap(async (req, res) => {
-    const email = typeof req.body?.email === "string" ? req.body.email : "";
+    const email = typeof req.body?.email === "string" ? req.body.email.trim() : "";
     const password =
       typeof req.body?.password === "string" ? req.body.password : "";
     if (!verifyCredentials(email, password)) {
       res.status(401).json({ ok: false, error: "Invalid email or password." });
       return;
     }
-    const token = await createSessionToken(email.trim().toLowerCase());
-    setSessionCookie(res, token);
+    const token = await createSessionToken(email.toLowerCase());
+    setSessionCookie(req, res, token);
     res.json({ ok: true });
   }),
 );
@@ -155,6 +161,13 @@ app.get(
   "/api/public/destinations",
   wrap(async (_req, res) => {
     res.json(await admin.listPublicDestinations());
+  }),
+);
+
+app.get(
+  "/api/public/themes",
+  wrap(async (_req, res) => {
+    res.json(await admin.listPublicThemes());
   }),
 );
 
@@ -340,6 +353,10 @@ const MODULES: Record<
     list: admin.listAdminHeroSlides,
     save: admin.saveHeroSlideAction,
   },
+  curated_themes: {
+    list: admin.listAdminThemes,
+    save: admin.saveThemeAction,
+  },
 };
 
 app.get(
@@ -429,8 +446,11 @@ app.post(
 );
 
 // SPA fallback: serve the built index.html for any non-API route.
-app.use((req, res, next) => {
-  if (req.path.startsWith("/api/")) return next();
+app.use((req, res, _next) => {
+  if (req.path.startsWith("/api/")) {
+    res.status(404).json({ ok: false, error: "API route not found." });
+    return;
+  }
   const candidates = [
     path.join(distDir, "index.html"),
     path.join(publicDir, "index.html"),
@@ -441,7 +461,11 @@ app.use((req, res, next) => {
   res.status(404).send("SPA not built yet — run `npm run build` first.");
 });
 
-const PORT = Number(process.env.PORT || 4000);
-app.listen(PORT, () => {
-  console.log(`[api] listening on http://localhost:${PORT}`);
-});
+if (!process.env.VERCEL) {
+  const PORT = Number(process.env.PORT || 4000);
+  app.listen(PORT, () => {
+    console.log(`[api] listening on http://localhost:${PORT}`);
+  });
+}
+
+export default app;

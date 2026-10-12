@@ -1,5 +1,8 @@
 import { query } from "./db.js";
-import generatedRaw from "../src/lib/data/packages.generated.json";
+import { createRequire } from "node:module";
+
+const require = createRequire(import.meta.url);
+const generatedRaw = require("../src/lib/data/packages.generated.json");
 
 /**
  * Data access for tour packages (server-side).

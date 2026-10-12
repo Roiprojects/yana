@@ -95,6 +95,8 @@ create table if not exists hero_slides (
   title             text not null,
   subtitle          text,
   image_url         text not null,
+  video_url         text,
+  mobile_video_url  text,
   cta_primary_text  text default 'Explore packages',
   cta_primary_link  text default '/packages',
   cta_secondary_text text default 'Plan a custom trip',

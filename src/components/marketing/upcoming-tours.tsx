@@ -138,7 +138,7 @@ export function UpcomingToursSection() {
           <div>
             <p className="eyebrow text-[#ad7f19]">Curated Departures</p>
             <h2 className="mt-1 text-xl font-bold tracking-tight text-[#10213a] sm:text-2xl md:text-3xl">
-              Upcoming Premium Tours
+              Upcoming Premium Group Tours
             </h2>
           </div>
           <Link

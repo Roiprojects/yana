@@ -7,6 +7,7 @@ import {
   ActiveToggle,
   FeaturedToggle,
 } from "@/components/admin/package-toggles";
+import { DeletePackageButton } from "@/components/admin/delete-package-button";
 import { EmptyState } from "@/components/ui/empty-state";
 import type { AdminPackageRow } from "@/lib/types/admin";
 
@@ -135,6 +136,7 @@ export function AdminPackagesPage() {
                         >
                           Open <ExternalLink className="h-3.5 w-3.5" />
                         </Link>
+                        <DeletePackageButton id={p.id} title={p.title} onDeleted={load} />
                       </div>
                     </td>
                   </tr>

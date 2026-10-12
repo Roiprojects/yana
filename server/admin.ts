@@ -123,10 +123,10 @@ export async function getEditablePackage(
   id: string,
 ): Promise<EditablePackage | null> {
   const rows = await query<EditablePackage>(
-    `select id, title, slug, scope, tour_type, category_name, destination_name,
+    `select id, title, slug, scope, tour_type, category_name, theme_name, destination_name,
             country, duration_days, duration_nights, overview, highlights,
             inclusions, exclusions, price_amount, taxes_info, hero_image_url,
-            is_featured, is_active, status
+            source_pdf, is_featured, is_active, status
        from tour_packages where id = $1 limit 1`,
     [id],
   );
@@ -192,6 +192,7 @@ export async function savePackage(
     scope?: string;
     tour_type?: string;
     category_name?: string;
+    theme_name?: string;
     destination_name?: string;
     country?: string;
     duration_days?: number | null;
@@ -203,9 +204,11 @@ export async function savePackage(
     price_amount?: number | null;
     taxes_info?: string;
     hero_image_url?: string;
+    source_pdf?: string;
     is_featured?: boolean;
     is_active?: boolean;
     status?: string;
+    itinerary?: unknown[];
   };
 
   const slug = (v.slug ?? "").toLowerCase().trim();
@@ -232,6 +235,7 @@ export async function savePackage(
     scope,
     tour_type,
     v.category_name || null,
+    v.theme_name || null,
     v.destination_name || null,
     v.country || null,
     v.duration_days ?? null,
@@ -243,21 +247,24 @@ export async function savePackage(
     v.price_amount ?? null,
     v.taxes_info || null,
     v.hero_image_url || null,
+    v.source_pdf || null,
     v.is_featured === true,
     v.is_active !== false,
     status,
+    JSON.stringify(v.itinerary ?? []),
   ];
 
   if (id) {
     const rows = await query(
       `update tour_packages set
-         title=$1, slug=$2, scope=$3, tour_type=$4, category_name=$5,
-         destination_name=$6, country=$7, duration_days=$8, duration_nights=$9,
-         overview=$10, highlights=$11::jsonb, inclusions=$12::jsonb,
-         exclusions=$13::jsonb, price_amount=$14, taxes_info=$15,
-         hero_image_url=$16, is_featured=$17, is_active=$18, status=$19,
+         title=$1, slug=$2, scope=$3, tour_type=$4, category_name=$5, theme_name=$6,
+         destination_name=$7, country=$8, duration_days=$9, duration_nights=$10,
+         overview=$11, highlights=$12::jsonb, inclusions=$13::jsonb,
+         exclusions=$14::jsonb, price_amount=$15, taxes_info=$16,
+         hero_image_url=$17, source_pdf=$18, is_featured=$19, is_active=$20, status=$21,
+         itinerary=$22::jsonb,
          updated_at=now()
-       where id=$20 returning id`,
+       where id=$23 returning id`,
       [...params, id],
     );
     if (!rows || rows.length === 0)
@@ -268,9 +275,9 @@ export async function savePackage(
         (title, slug, scope, tour_type, category_name, destination_name, country,
          duration_days, duration_nights, overview, highlights, inclusions, exclusions,
          price_amount, taxes_info, hero_image_url, is_featured, is_active, status,
-         review_status, sort_order)
+         itinerary, review_status, sort_order)
        values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12::jsonb,$13::jsonb,
-         $14,$15,$16,$17,$18,$19,'verified',
+         $14,$15,$16,$17,$18,$19,$20::jsonb,'verified',
          (select coalesce(max(sort_order),0)+10 from tour_packages))
        returning id`,
       params,
@@ -428,11 +435,66 @@ export type AdminHeroRow = {
 
 export async function listAdminHeroSlides(): Promise<AdminHeroRow[]> {
   const rows = await query<AdminHeroRow>(
-    `select id, title, subtitle, image_url, cta_primary_text, cta_primary_link, is_active, sort_order
+    `select id, title, subtitle, image_url, video_url, mobile_video_url, cta_primary_text, cta_primary_link, is_active, sort_order
        from hero_slides
       order by sort_order asc`,
   );
   return rows ?? [];
+}
+
+// ── Curated Themes ────────────────────────────────────────────────────────────
+export type AdminThemeRow = {
+  id: string;
+  title: string;
+  tag: string;
+  blurb: string;
+  href: string;
+  image_url: string;
+  scope: "all" | "domestic" | "international";
+  is_active: boolean;
+  sort_order: number;
+};
+
+export async function listAdminThemes(): Promise<AdminThemeRow[]> {
+  const rows = await query<AdminThemeRow>(
+    `select id, title, tag, blurb, href, image_url, scope, is_active, sort_order
+       from curated_themes
+      order by sort_order asc`,
+  );
+  return rows ?? [];
+}
+
+export async function listPublicThemes(): Promise<AdminThemeRow[]> {
+  const rows = await query<AdminThemeRow>(
+    `select id, title, tag, blurb, href, image_url, scope, is_active, sort_order
+       from curated_themes
+      where is_active = true
+      order by sort_order asc`,
+  );
+  return rows ?? [];
+}
+
+export async function saveThemeAction(body: Record<string, unknown>) {
+  const id = str(body.id) || null;
+  const title = str(body.title);
+  const tag = str(body.tag);
+  const blurb = str(body.blurb);
+  const href = str(body.href) || "/packages";
+  const image_url = str(body.image_url);
+  const scope = str(body.scope) || "all";
+
+  if (id) {
+    await query(
+      `update curated_themes set title=$1, tag=$2, blurb=$3, href=$4, image_url=$5, scope=$6 where id=$7`,
+      [title, tag, blurb, href, image_url, scope, id],
+    );
+  } else {
+    await query(
+      `insert into curated_themes (title, tag, blurb, href, image_url, scope) values ($1, $2, $3, $4, $5, $6)`,
+      [title, tag, blurb, href, image_url, scope],
+    );
+  }
+  return { ok: true };
 }
 
 // ── Public Fetchers ─────────────────────────────────────────────────────────
@@ -532,6 +594,7 @@ const ALLOWED_TABLES = [
   "faqs",
   "contact_info",
   "hero_slides",
+  "curated_themes",
 ] as const;
 
 export function assertTable(table: string): void {
@@ -766,18 +829,20 @@ export async function saveHeroSlideAction(body: Record<string, unknown>) {
   const title = str(body.title);
   const subtitle = str(body.subtitle);
   const image_url = str(body.image_url);
+  const video_url = str(body.video_url);
+  const mobile_video_url = str(body.mobile_video_url);
   const cta_primary_text = str(body.cta_primary_text) || "Explore packages";
   const cta_primary_link = str(body.cta_primary_link) || "/packages";
 
   if (id) {
     await query(
-      `update hero_slides set title=$1, subtitle=$2, image_url=$3, cta_primary_text=$4, cta_primary_link=$5 where id=$6`,
-      [title, subtitle, image_url, cta_primary_text, cta_primary_link, id],
+      `update hero_slides set title=$1, subtitle=$2, image_url=$3, video_url=$4, mobile_video_url=$5, cta_primary_text=$6, cta_primary_link=$7 where id=$8`,
+      [title, subtitle, image_url, video_url, mobile_video_url, cta_primary_text, cta_primary_link, id],
     );
   } else {
     await query(
-      `insert into hero_slides (title, subtitle, image_url, cta_primary_text, cta_primary_link) values ($1, $2, $3, $4, $5)`,
-      [title, subtitle, image_url, cta_primary_text, cta_primary_link],
+      `insert into hero_slides (title, subtitle, image_url, video_url, mobile_video_url, cta_primary_text, cta_primary_link) values ($1, $2, $3, $4, $5, $6, $7)`,
+      [title, subtitle, image_url, video_url, mobile_video_url, cta_primary_text, cta_primary_link],
     );
   }
   return { ok: true };

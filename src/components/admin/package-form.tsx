@@ -1,9 +1,9 @@
 
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Loader2 } from "lucide-react";
+import { Loader2, Upload } from "lucide-react";
 import { packageInputSchema, type PackageInput } from "@/lib/schemas/package";
 import { api } from "@/lib/api/client";
 import { Button } from "@/components/ui/button";
@@ -21,11 +21,24 @@ function toLines(arr: string[] | null | undefined): string {
 export function PackageForm({ pkg }: { pkg: EditablePackage | null }) {
   const navigate = useNavigate();
   const [serverError, setServerError] = useState<string | null>(null);
+  const [availableThemes, setAvailableThemes] = useState<{ id: string; title: string }[]>([]);
+
+  useEffect(() => {
+    fetch("/api/public/themes")
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data)) {
+          setAvailableThemes(data.map((t) => ({ id: t.id, title: t.title })));
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const {
     register,
     handleSubmit,
     setError,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<PackageInput>({
     resolver: zodResolver(packageInputSchema),
@@ -35,6 +48,7 @@ export function PackageForm({ pkg }: { pkg: EditablePackage | null }) {
       scope: pkg?.scope ?? "domestic",
       tour_type: pkg?.tour_type ?? "group",
       category_name: pkg?.category_name ?? "",
+      theme_name: pkg?.theme_name ?? "",
       destination_name: pkg?.destination_name ?? "",
       country: pkg?.country ?? "",
       duration_days: pkg?.duration_days ?? undefined,
@@ -49,6 +63,7 @@ export function PackageForm({ pkg }: { pkg: EditablePackage | null }) {
           : undefined,
       taxes_info: pkg?.taxes_info ?? "",
       hero_image_url: pkg?.hero_image_url ?? "",
+      source_pdf: pkg?.source_pdf ?? "",
       is_featured: pkg?.is_featured ?? false,
       is_active: pkg?.is_active ?? true,
       status: pkg?.status ?? "published",
@@ -118,6 +133,28 @@ export function PackageForm({ pkg }: { pkg: EditablePackage | null }) {
             className={field}
             {...register("category_name")}
           />
+        </div>
+        <div>
+          <label className={label} htmlFor="theme_name">
+            Curated Theme
+          </label>
+          <select id="theme_name" className={field} {...register("theme_name")}>
+            <option value="">-- Select Curated Theme --</option>
+            {availableThemes.length > 0 ? (
+              availableThemes.map((t) => (
+                <option key={t.id} value={t.title}>
+                  {t.title}
+                </option>
+              ))
+            ) : (
+              <>
+                <option value="Mountains & the North">Mountains & the North</option>
+                <option value="Beaches & Islands">Beaches & Islands</option>
+                <option value="Heritage & Pilgrimage">Heritage & Pilgrimage</option>
+                <option value="International Escapes">International Escapes</option>
+              </>
+            )}
+          </select>
         </div>
         <div>
           <label className={label} htmlFor="destination_name">
@@ -229,15 +266,82 @@ export function PackageForm({ pkg }: { pkg: EditablePackage | null }) {
           <label className={label} htmlFor="hero_image_url">
             Hero image URL
           </label>
-          <input
-            id="hero_image_url"
-            className={field}
-            {...register("hero_image_url")}
-          />
+          <div className="flex items-center gap-2">
+            <input
+              id="hero_image_url"
+              className={field}
+              {...register("hero_image_url")}
+            />
+            <label className="cursor-pointer inline-flex items-center gap-1.5 rounded-lg border border-border-soft bg-bg-soft px-3 py-2 text-xs font-semibold whitespace-nowrap text-text-main hover:bg-white transition">
+              <Upload className="h-3.5 w-3.5 text-primary" />
+              Upload Image
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  const data = new FormData();
+                  data.append("file", file);
+                  try {
+                    const json = await api.upload(data);
+                    if (json.ok && json.url) {
+                      setValue("hero_image_url", json.url);
+                    }
+                  } catch (err) {
+                    alert("Upload failed");
+                  }
+                }}
+              />
+            </label>
+          </div>
           {errors.hero_image_url && (
             <p className={err}>{errors.hero_image_url.message}</p>
           )}
         </div>
+        <div>
+          <label className={label} htmlFor="source_pdf">
+            Package Brochure PDF
+          </label>
+          <div className="flex items-center gap-2">
+            <input
+              id="source_pdf"
+              placeholder="/uploads/brochure.pdf or PDF URL"
+              className={field}
+              {...register("source_pdf")}
+            />
+            <label className="cursor-pointer inline-flex items-center gap-1.5 rounded-lg border border-border-soft bg-bg-soft px-3 py-2 text-xs font-semibold whitespace-nowrap text-text-main hover:bg-white transition">
+              <Upload className="h-3.5 w-3.5 text-primary" />
+              Upload PDF
+              <input
+                type="file"
+                accept=".pdf,application/pdf"
+                className="hidden"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  const data = new FormData();
+                  data.append("file", file);
+                  try {
+                    const json = await api.upload(data);
+                    if (json.ok && json.url) {
+                      setValue("source_pdf", json.url);
+                    }
+                  } catch (err) {
+                    alert("Upload failed");
+                  }
+                }}
+              />
+            </label>
+          </div>
+          {errors.source_pdf && (
+            <p className={err}>{errors.source_pdf.message}</p>
+          )}
+        </div>
+      </div>
+
+      <div className="grid gap-5 md:grid-cols-2">
         <div>
           <label className={label} htmlFor="taxes_info">
             Price note / taxes

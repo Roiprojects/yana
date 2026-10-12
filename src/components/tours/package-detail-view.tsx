@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   Clock,
   MapPin,
@@ -16,6 +17,7 @@ import { Reveal } from "@/components/ui/reveal";
 import { whatsappLink } from "@/lib/site-config";
 import { useSiteSettings } from "@/components/providers/site-settings-context";
 import { EnquireNowButton } from "@/components/ui/enquire-now-button";
+import { DownloadPdfModal } from "@/components/forms/download-pdf-modal";
 import type { PackageDetail } from "@/lib/types/tour";
 
 const MEALS: Record<string, string> = {
@@ -109,6 +111,7 @@ function formatPrice(amount: number | null, currency: string): string | null {
 
 export function PackageDetailView({ pkg }: { pkg: PackageDetail }) {
   const { whatsapp } = useSiteSettings();
+  const [pdfModalOpen, setPdfModalOpen] = useState(false);
   const price = formatPrice(pkg.price_amount, pkg.price_currency);
   const dur =
     pkg.duration_days != null && pkg.duration_nights != null
@@ -226,8 +229,17 @@ export function PackageDetailView({ pkg }: { pkg: PackageDetail }) {
                               {day.title}
                             </h3>
                           )}
+                          {day.image_url && (
+                            <div className="mt-3 overflow-hidden rounded-xl border border-border-soft bg-lavender/30">
+                              <img
+                                src={day.image_url}
+                                alt={day.title || `Day ${day.day_number}`}
+                                className="h-48 w-full object-cover transition duration-300 hover:scale-105"
+                              />
+                            </div>
+                          )}
                           {day.description && (
-                            <p className="mt-1.5 text-sm text-text-secondary">
+                            <p className="mt-2 text-sm text-text-secondary leading-relaxed">
                               {day.description}
                             </p>
                           )}
@@ -348,20 +360,27 @@ export function PackageDetailView({ pkg }: { pkg: PackageDetail }) {
                 >
                   WhatsApp us
                 </LinkButton>
-                <a
-                  href={`/itineraries/${pkg.slug}.pdf`}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                <button
+                  type="button"
+                  onClick={() => setPdfModalOpen(true)}
                   className="mt-1 inline-flex items-center justify-center gap-2 rounded-full border border-border-soft px-5 py-2.5 text-sm font-semibold text-deep transition-colors hover:border-gold hover:text-primary"
                 >
                   <FileDown className="h-4 w-4" />
                   Download itinerary (PDF)
-                </a>
+                </button>
               </div>
             </div>
           </aside>
         </div>
       </Container>
+
+      {pdfModalOpen && (
+        <DownloadPdfModal
+          pkg={pkg}
+          pdfUrl={pkg.source_pdf}
+          onClose={() => setPdfModalOpen(false)}
+        />
+      )}
     </article>
   );
 }

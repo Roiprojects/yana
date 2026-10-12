@@ -184,9 +184,29 @@ function ThemeCarouselCard({
 }
 
 export function CuratedThemes() {
-  const [selectedScope, setSelectedScope] = useState<"all" | "domestic" | "international">("all");
   const [browseDropdownOpen, setBrowseDropdownOpen] = useState(false);
+  const [themes, setThemes] = useState<ThemeCollection[]>(curatedThemesData);
   const browseDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    fetch("/api/public/themes")
+      .then((res) => res.json())
+      .then((data: any[]) => {
+        if (Array.isArray(data) && data.length > 0) {
+          const mapped: ThemeCollection[] = data.map((t) => ({
+            title: t.title,
+            tag: t.tag || "CURATED THEME",
+            blurb: t.blurb || "",
+            href: t.href || "/packages",
+            icon: t.scope === "international" ? Globe2 : Compass,
+            images: t.image_url ? [t.image_url] : ["/themes/theme-mountains.jpg"],
+            scope: t.scope || "all",
+          }));
+          setThemes(mapped);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -201,10 +221,6 @@ export function CuratedThemes() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const displayedThemes = selectedScope === "all" 
-    ? curatedThemesData 
-    : curatedThemesData.filter(theme => theme.scope === selectedScope);
-
   return (
     <>
       {/* Section Header */}
@@ -217,50 +233,8 @@ export function CuratedThemes() {
             </h2>
           </div>
           
-          {/* Action Controls: Domestic/International Filter Pills + Advanced Dropdown */}
+          {/* Action Controls: Advanced Dropdown */}
           <div className="flex flex-wrap items-center gap-3">
-            {/* Segmented Filter Pills (All / Domestic / International) */}
-            <div className="inline-flex items-center rounded-full border border-[#e8decb] bg-white p-1 shadow-sm backdrop-blur-md">
-              <button
-                type="button"
-                onClick={() => setSelectedScope("all")}
-                className={cn(
-                  "rounded-full px-3.5 py-1.5 text-xs font-bold transition-all duration-200",
-                  selectedScope === "all"
-                    ? "bg-primary text-white shadow-[0_8px_18px_-6px_rgba(11,102,228,0.6)]"
-                    : "text-text-secondary hover:text-deep",
-                )}
-              >
-                All
-              </button>
-              <button
-                type="button"
-                onClick={() => setSelectedScope("domestic")}
-                className={cn(
-                  "inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-bold transition-all duration-200",
-                  selectedScope === "domestic"
-                    ? "bg-primary text-white shadow-[0_8px_18px_-6px_rgba(11,102,228,0.6)]"
-                    : "text-text-secondary hover:text-deep",
-                )}
-              >
-                <MapPin className="h-3.5 w-3.5" />
-                Domestic
-              </button>
-              <button
-                type="button"
-                onClick={() => setSelectedScope("international")}
-                className={cn(
-                  "inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-bold transition-all duration-200",
-                  selectedScope === "international"
-                    ? "bg-primary text-white shadow-[0_8px_18px_-6px_rgba(11,102,228,0.6)]"
-                    : "text-text-secondary hover:text-deep",
-                )}
-              >
-                <Globe2 className="h-3.5 w-3.5" />
-                International
-              </button>
-            </div>
-
             {/* Advanced Browse Dropdown Menu */}
             <div ref={browseDropdownRef} className="relative">
               <button
@@ -375,7 +349,7 @@ export function CuratedThemes() {
 
       {/* Grid Alignment with Modern Luxury Glassmorphic Design */}
       <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-        {displayedThemes.map((collection, index) => (
+        {themes.map((collection, index) => (
           <ThemeCarouselCard
             key={collection.title}
             collection={collection}

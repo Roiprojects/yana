@@ -52,6 +52,7 @@ export type ItineraryDay = {
   description: string | null;
   meals: string | null;
   stay: string | null;
+  image_url?: string | null;
 };
 
 /** Fields needed to render a package card in listings. */
@@ -77,5 +78,6 @@ export type PackageListItem = Pick<
 export type PackageDetail = TourPackagesRow & {
   itinerary: ItineraryDay[];
   category_name?: string | null;
+  theme_name?: string | null;
   destination_name?: string | null;
 };

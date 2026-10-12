@@ -16,6 +16,7 @@ import {
   Contact,
   Inbox,
   Quote,
+  HelpCircle,
   Search,
   Settings,
   ShieldCheck,
@@ -37,11 +38,13 @@ export const adminNav: AdminNavGroup[] = [
     items: [
       { label: "Hero Banners", href: "/admin/hero", icon: Images },
       { label: "Home Page", href: "/admin/home", icon: Home },
+      { label: "Curated Themes", href: "/admin/themes", icon: Sparkles },
       { label: "About Us", href: "/admin/about", icon: Info },
       { label: "Services", href: "/admin/services", icon: Wrench },
       { label: "Gallery", href: "/admin/gallery", icon: ImageIcon },
       { label: "Brochure & PDFs", href: "/admin/brochure", icon: FileText },
       { label: "Testimonials", href: "/admin/testimonials", icon: Quote },
+      { label: "FAQs", href: "/admin/faqs", icon: HelpCircle },
     ],
   },
   {

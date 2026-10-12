@@ -34,6 +34,7 @@ import { AdminEnquiriesPage } from "@/pages/admin/enquiries";
 import { AdminCategoriesPage } from "@/pages/admin/categories";
 import { AdminHomePage } from "@/pages/admin/home";
 import { AdminDestinationsPage } from "@/pages/admin/destinations";
+import { AdminThemesPage } from "@/pages/admin/themes";
 import { AdminHeroPage } from "@/pages/admin/hero";
 import { AdminGalleryPage } from "@/pages/admin/gallery";
 import { AdminTestimonialsPage } from "@/pages/admin/testimonials";
@@ -49,6 +50,7 @@ import { AdminItineraryPage } from "@/pages/admin/itinerary";
 import { AdminSeoPage } from "@/pages/admin/seo";
 import { AdminSettingsPage } from "@/pages/admin/settings";
 import { AdminPasswordPage } from "@/pages/admin/password";
+import { AdminFaqsPage } from "@/pages/admin/faqs";
 import { ScrollToTop } from "@/components/scroll-to-top";
 
 class ErrorBoundary extends React.Component<
@@ -156,6 +158,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
           <Route path="categories" element={<AdminCategoriesPage />} />
           <Route path="home" element={<AdminHomePage />} />
           <Route path="destinations" element={<AdminDestinationsPage />} />
+          <Route path="themes" element={<AdminThemesPage />} />
           <Route path="hero" element={<AdminHeroPage />} />
           <Route path="gallery" element={<AdminGalleryPage />} />
           <Route path="testimonials" element={<AdminTestimonialsPage />} />
@@ -174,6 +177,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
           <Route path="seo" element={<AdminSeoPage />} />
           <Route path="settings" element={<AdminSettingsPage />} />
           <Route path="account/password" element={<AdminPasswordPage />} />
+          <Route path="faqs" element={<AdminFaqsPage />} />
         </Route>
 
         {/* 404 */}

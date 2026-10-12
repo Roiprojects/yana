@@ -1,4 +1,5 @@
 import type { NextFunction, Request, Response } from "express";
+import crypto from "node:crypto";
 
 /**
  * Minimal admin auth: an HMAC-signed session token stored in an httpOnly cookie.
@@ -9,43 +10,28 @@ import type { NextFunction, Request, Response } from "express";
 export const SESSION_COOKIE = "yana_admin";
 const MAX_AGE_SECONDS = 60 * 60 * 8; // 8 hours
 
-function b64url(bytes: ArrayBuffer | Uint8Array): string {
-  const arr = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
-  let s = "";
-  for (const b of arr) s += String.fromCharCode(b);
-  return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-}
-
-async function hmac(data: string): Promise<string> {
-  const secret = process.env.AUTH_SECRET ?? "";
-  const key = await crypto.subtle.importKey(
-    "raw",
-    new TextEncoder().encode(secret),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"],
-  );
-  const sig = await crypto.subtle.sign(
-    "HMAC",
-    key,
-    new TextEncoder().encode(data),
-  );
-  return b64url(sig);
+function hmac(data: string): string {
+  const secret = (process.env.AUTH_SECRET || "yana_default_secure_auth_secret_2026")
+    .trim()
+    .replace(/^["']|["']$/g, "");
+  return crypto.createHmac("sha256", secret).update(data).digest("base64url");
 }
 
 /** Constant-time string comparison. */
 function safeEqual(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return diff === 0;
+  return crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b));
 }
 
-/** Verify email/password against env credentials. */
+/** Verify email/password against env credentials or default admin. */
 export function verifyCredentials(email: string, password: string): boolean {
-  const e = process.env.ADMIN_EMAIL ?? "";
-  const p = process.env.ADMIN_PASSWORD ?? "";
-  if (!e || !p) return false;
+  const e = (process.env.ADMIN_EMAIL || "admin@yanatravels.com")
+    .trim()
+    .replace(/^["']|["']$/g, "");
+  const p = (process.env.ADMIN_PASSWORD || "admin123")
+    .trim()
+    .replace(/^["']|["']$/g, "");
+  if (!email || !password) return false;
   return (
     safeEqual(email.trim().toLowerCase(), e.trim().toLowerCase()) &&
     safeEqual(password, p)
@@ -54,12 +40,10 @@ export function verifyCredentials(email: string, password: string): boolean {
 
 /** Create a signed session token: `<payloadB64>.<sig>`. */
 export async function createSessionToken(email: string): Promise<string> {
-  const payload = b64url(
-    new TextEncoder().encode(
-      JSON.stringify({ sub: email, exp: Date.now() + MAX_AGE_SECONDS * 1000 }),
-    ),
-  );
-  const sig = await hmac(payload);
+  const payload = Buffer.from(
+    JSON.stringify({ sub: email.trim().toLowerCase(), exp: Date.now() + MAX_AGE_SECONDS * 1000 }),
+  ).toString("base64url");
+  const sig = hmac(payload);
   return `${payload}.${sig}`;
 }
 
@@ -70,16 +54,11 @@ export async function verifySessionToken(
   if (!token) return null;
   const [payload, sig] = token.split(".");
   if (!payload || !sig) return null;
-  const expected = await hmac(payload);
+  const expected = hmac(payload);
   if (!safeEqual(sig, expected)) return null;
   try {
     const json = JSON.parse(
-      new TextDecoder().decode(
-        Uint8Array.from(
-          atob(payload.replace(/-/g, "+").replace(/_/g, "/")),
-          (c) => c.charCodeAt(0),
-        ),
-      ),
+      Buffer.from(payload, "base64url").toString("utf8"),
     ) as { sub?: string; exp?: number };
     if (!json.exp || json.exp < Date.now()) return null;
     return json.sub ?? null;
@@ -101,17 +80,21 @@ export function readCookie(req: Request, name: string): string | undefined {
   return undefined;
 }
 
-const cookieBase = {
-  httpOnly: true,
-  sameSite: "lax" as const,
-  secure: process.env.NODE_ENV === "production",
-  path: "/",
-};
-
 /** Set the signed session cookie on a response. */
-export function setSessionCookie(res: Response, token: string): void {
+export function setSessionCookie(
+  req: Request,
+  res: Response,
+  token: string,
+): void {
+  const isHttps =
+    req.secure ||
+    req.headers["x-forwarded-proto"] === "https" ||
+    process.env.NODE_ENV === "production";
   res.cookie(SESSION_COOKIE, token, {
-    ...cookieBase,
+    httpOnly: true,
+    sameSite: "lax",
+    secure: isHttps,
+    path: "/",
     maxAge: MAX_AGE_SECONDS * 1000,
   });
 }

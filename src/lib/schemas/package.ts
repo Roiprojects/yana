@@ -33,6 +33,7 @@ export const packageInputSchema = z.object({
   scope: z.enum(["domestic", "international"]),
   tour_type: z.enum(["group", "customized"]),
   category_name: z.string().optional(),
+  theme_name: z.string().optional(),
   destination_name: z.string().optional(),
   country: z.string().optional(),
   duration_days: optionalInt,
@@ -46,6 +47,10 @@ export const packageInputSchema = z.object({
   hero_image_url: z
     .string()
     .url("Must be a valid URL")
+    .optional()
+    .or(z.literal("")),
+  source_pdf: z
+    .string()
     .optional()
     .or(z.literal("")),
   is_featured: z.coerce.boolean(),

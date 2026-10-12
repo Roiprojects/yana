@@ -34,7 +34,14 @@ export function AdminLoginForm() {
       const next = searchParams.get("next") ?? "/admin";
       navigate(next.startsWith("/admin") ? next : "/admin");
     } catch (err) {
-      setNotice((err as Error).message);
+      const msg = (err as Error).message || "Login failed";
+      if (msg.toLowerCase().includes("not found") || msg.includes("404")) {
+        setNotice(
+          "Backend authentication service is unavailable. Please verify the Express server is running on port 4000.",
+        );
+      } else {
+        setNotice(msg);
+      }
     }
   }
 
