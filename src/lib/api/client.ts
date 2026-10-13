@@ -353,7 +353,19 @@ function localDetail(slug: string): PackageDetail | null {
 async function parse<T>(res: Response): Promise<T> {
   const contentType = res.headers.get("content-type") || "";
   if (!contentType.includes("application/json")) {
-    throw new Error(`Non-JSON response received: ${contentType || "HTML"}`);
+    if (res.status === 404) {
+      throw new Error(
+        "API endpoint not found (404). Please ensure the Node.js backend server is running on port 4000.",
+      );
+    }
+    if (res.status === 502 || res.status === 503 || res.status === 504) {
+      throw new Error(
+        `Backend service is unavailable (HTTP ${res.status}). The Node.js server is stopped or unreachable.`,
+      );
+    }
+    throw new Error(
+      `Backend service returned HTML (${res.status}). Ensure the Express backend process is active on port 4000.`,
+    );
   }
   let body: unknown = null;
   try {

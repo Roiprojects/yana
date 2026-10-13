@@ -1480,6 +1480,15 @@ app.post(
     res.json({ ok: true, url: `/uploads/${req.file.filename}` });
   })
 );
+app.use((err, _req, res, _next) => {
+  const status = err?.status || err?.statusCode || 500;
+  if (!res.headersSent) {
+    res.status(status).json({
+      ok: false,
+      error: err?.message || "Internal server error."
+    });
+  }
+});
 app.use((req, res, _next) => {
   if (req.path.startsWith("/api/")) {
     res.status(404).json({ ok: false, error: "API route not found." });

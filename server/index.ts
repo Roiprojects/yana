@@ -1,5 +1,5 @@
 import dotenv from "dotenv";
-import express, { type Request, type Response } from "express";
+import express, { type Request, type Response, type NextFunction } from "express";
 import cors from "cors";
 import path from "node:path";
 import fs from "node:fs/promises";
@@ -599,6 +599,17 @@ app.post(
     res.json({ ok: true, url: `/uploads/${req.file.filename}` });
   }),
 );
+
+// Global Express error handler: guarantees that API requests always return JSON, NEVER HTML error pages.
+app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+  const status = err?.status || err?.statusCode || 500;
+  if (!res.headersSent) {
+    res.status(status).json({
+      ok: false,
+      error: err?.message || "Internal server error.",
+    });
+  }
+});
 
 // SPA fallback: serve the built index.html for any non-API route.
 app.use((req, res, _next) => {
