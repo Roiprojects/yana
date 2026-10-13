@@ -47,6 +47,26 @@ function textField(
   );
 }
 
+const DEFAULT_HEADLINE = "Welcome to Yana Travels";
+const DEFAULT_INTRO =
+  "Yana Travels is a premium travel company headquartered in Udupi, Karnataka, with branch offices in Bengaluru and Hubli. We have been crafting unforgettable journeys since 2005.\n\nWith over two decades of experience, our expert travel advisors design seamless domestic and international tour packages tailored to every kind of traveller — from families and honeymooners to pilgrims and adventure seekers.";
+const DEFAULT_OFFERINGS =
+  "Domestic & International Group Tours\nCustomized Private Holidays\nHoneymoon Packages\nPilgrimage & Heritage Tours\nMICE & Corporate Travel\nFlight, Hotel & Visa Services\nForex & Travel Insurance";
+const DEFAULT_VALUES: AboutValue[] = [
+  {
+    title: "End-to-end planning",
+    desc: "One team handling stays, sightseeing, transfers, and documentation with a more polished travel experience.",
+  },
+  {
+    title: "Personal attention",
+    desc: "Itineraries shaped around how you like to travel, not a fixed template or one-size-fits-all route.",
+  },
+  {
+    title: "Trusted support",
+    desc: "A reliable team you can reach before departure and while your journey is in motion.",
+  },
+];
+
 function splitLines(value: string): string[] {
   return value
     .split("\n")
@@ -56,10 +76,10 @@ function splitLines(value: string): string[] {
 
 export function AboutClient() {
   const [form, setForm] = useState<AboutForm>({
-    headline: "",
-    intro: "",
-    offerings: "",
-    values: [],
+    headline: DEFAULT_HEADLINE,
+    intro: DEFAULT_INTRO,
+    offerings: DEFAULT_OFFERINGS,
+    values: DEFAULT_VALUES,
   });
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -73,25 +93,30 @@ export function AboutClient() {
         const about: AboutContent = res.about ?? {};
         const rawIntro = about.intro;
         const introStr = Array.isArray(rawIntro)
-          ? rawIntro.join("\n")
-          : typeof rawIntro === "string"
+          ? rawIntro.join("\n\n")
+          : typeof rawIntro === "string" && rawIntro.trim().length > 0
           ? rawIntro
-          : "";
+          : DEFAULT_INTRO;
         const rawOfferings = about.offerings;
         const offeringsStr = Array.isArray(rawOfferings)
           ? rawOfferings.join("\n")
-          : typeof rawOfferings === "string"
+          : typeof rawOfferings === "string" && rawOfferings.trim().length > 0
           ? rawOfferings
-          : "";
+          : DEFAULT_OFFERINGS;
+        const valuesList =
+          Array.isArray(about.values) && about.values.length > 0
+            ? about.values
+            : DEFAULT_VALUES;
+
         setForm({
-          headline: about.headline ?? "",
+          headline: about.headline?.trim() || DEFAULT_HEADLINE,
           intro: introStr,
           offerings: offeringsStr,
-          values: Array.isArray(about.values) ? about.values : [],
+          values: valuesList,
         });
       })
       .catch(() => {
-        /* keep empty form */
+        /* keep default populated form */
       });
     return () => {
       cancelled = true;
@@ -113,6 +138,15 @@ export function AboutClient() {
   const removeValue = (index: number) =>
     setForm((f) => ({ ...f, values: f.values.filter((_, i) => i !== index) }));
 
+  const resetDefaults = () => {
+    setForm({
+      headline: DEFAULT_HEADLINE,
+      intro: DEFAULT_INTRO,
+      offerings: DEFAULT_OFFERINGS,
+      values: DEFAULT_VALUES,
+    });
+  };
+
   async function handleSave() {
     setSaving(true);
     setMessage(null);
@@ -130,7 +164,7 @@ export function AboutClient() {
         value as unknown as Record<string, unknown>,
       );
       setMessage(
-        res.ok ? "Saved. Changes appear on the About page." : "Save failed.",
+        res.ok ? "Saved successfully! Changes are now live on the About page." : "Save failed.",
       );
     } catch {
       setMessage("Error saving about content.");
@@ -150,7 +184,7 @@ export function AboutClient() {
         </p>
       </div>
 
-      <div className="grid gap-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:grid-cols-2">
+      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
         {textField("Headline", form.headline, set("headline"), {
           placeholder: "Welcome to Yana Travels",
         })}
@@ -221,12 +255,12 @@ export function AboutClient() {
         </div>
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <button
           type="button"
           onClick={handleSave}
           disabled={saving}
-          className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-primary-hover disabled:opacity-60"
+          className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-primary-hover disabled:opacity-60 shadow-sm"
         >
           {saving ? (
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -235,7 +269,19 @@ export function AboutClient() {
           )}
           Save About Content
         </button>
-        {message && <p className="text-sm text-emerald-600">{message}</p>}
+        <button
+          type="button"
+          onClick={resetDefaults}
+          disabled={saving}
+          className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+        >
+          Reset to Standard Copy
+        </button>
+        {message && (
+          <p className="rounded-lg bg-emerald-50 px-3 py-1.5 text-sm font-medium text-emerald-700 border border-emerald-200">
+            {message}
+          </p>
+        )}
       </div>
     </div>
   );
