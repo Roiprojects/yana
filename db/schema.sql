@@ -48,10 +48,13 @@ create table if not exists services (
   name        text not null,
   slug        text unique not null,
   description text,
+  image_url   text,
   sort_order  int not null default 0,
   is_active   boolean not null default true,
   status      text not null default 'published'
 );
+
+alter table services add column if not exists image_url text;
 
 -- Contact / offices (no bank details, ever).
 create table if not exists contact_info (

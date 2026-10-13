@@ -95,12 +95,29 @@ export function CrudManager<T extends { id: string; is_active?: boolean }>({
       const json = await api.upload(data);
       if (json.ok && json.url) {
         setImageUrls((prev) => ({ ...prev, [fieldName]: json.url as string }));
-      } else {
-        alert("Image upload failed: " + (json.error || "Unknown error"));
+        setUploadingField(null);
+        return;
       }
     } catch {
-      alert("Image upload failed");
-    } finally {
+      // Fall through to client reader fallback
+    }
+
+    try {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const url = ev.target?.result as string;
+        if (url) {
+          setImageUrls((prev) => ({ ...prev, [fieldName]: url }));
+        }
+        setUploadingField(null);
+      };
+      reader.onerror = () => {
+        alert("Failed to read image file.");
+        setUploadingField(null);
+      };
+      reader.readAsDataURL(file);
+    } catch {
+      alert("Failed to process image.");
       setUploadingField(null);
     }
   }
@@ -299,14 +316,27 @@ export function CrudManager<T extends { id: string; is_active?: boolean }>({
                 }
 
                 if (f.type === "image") {
-                  const currentImg = imageUrls[f.name] || (val as string) || "";
+                  const currentImg = imageUrls[f.name] ?? (val as string) ?? "";
                   return (
                     <div key={f.name}>
-                      <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
-                        {f.label}
-                      </label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-xs font-bold uppercase tracking-wider text-slate-600">
+                          {f.label}
+                        </label>
+                        {currentImg && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setImageUrls((prev) => ({ ...prev, [f.name]: "" }))
+                            }
+                            className="text-xs text-rose-600 hover:text-rose-700 font-semibold"
+                          >
+                            Remove image
+                          </button>
+                        )}
+                      </div>
                       {currentImg && (
-                        <div className="mb-2 relative h-32 w-full overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
+                        <div className="mb-2 relative h-36 w-full max-w-sm overflow-hidden rounded-xl border border-slate-200 bg-slate-50 shadow-xs">
                           <img
                             src={currentImg}
                             alt="Preview"
@@ -314,21 +344,27 @@ export function CrudManager<T extends { id: string; is_active?: boolean }>({
                           />
                         </div>
                       )}
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2">
                         <input
-                          type="hidden"
+                          type="text"
                           name={f.name}
-                          value={imageUrls[f.name] || currentImg}
+                          value={currentImg}
+                          placeholder={f.placeholder || "Paste image URL or click Upload"}
+                          onChange={(e) =>
+                            setImageUrls((prev) => ({
+                              ...prev,
+                              [f.name]: e.target.value,
+                            }))
+                          }
+                          className="flex-1 rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary"
                         />
-                        <label className="cursor-pointer inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 transition">
+                        <label className="cursor-pointer inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 transition shrink-0">
                           {uploadingField === f.name ? (
                             <Loader2 className="h-4 w-4 animate-spin text-primary" />
                           ) : (
                             <Upload className="h-4 w-4 text-primary" />
                           )}
-                          {uploadingField === f.name
-                            ? "Uploading…"
-                            : "Upload Image"}
+                          {uploadingField === f.name ? "Uploading…" : "Upload Image"}
                           <input
                             type="file"
                             accept="image/*"
@@ -336,11 +372,6 @@ export function CrudManager<T extends { id: string; is_active?: boolean }>({
                             onChange={(e) => handleImageUpload(f.name, e)}
                           />
                         </label>
-                        {currentImg && (
-                          <span className="text-xs text-slate-400 truncate max-w-[200px]">
-                            {currentImg}
-                          </span>
-                        )}
                       </div>
                     </div>
                   );

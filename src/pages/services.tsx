@@ -178,7 +178,12 @@ const fallbackServices = [
   },
 ];
 
-type ServiceItem = { id: string; name: string; description?: string };
+type ServiceItem = {
+  id: string;
+  name: string;
+  description?: string;
+  image_url?: string;
+};
 
 export function ServicesPage() {
   const [services, setServices] = useState<ServiceItem[]>([]);
@@ -255,7 +260,7 @@ export function ServicesPage() {
               <div className="group relative flex h-full min-h-[310px] flex-col justify-between overflow-hidden rounded-[1.8rem] border border-white/40 bg-deep p-6 shadow-[0_18px_42px_-18px_rgba(16,33,58,0.38)] transition-all duration-500 hover:-translate-y-2 hover:border-primary/40 hover:shadow-[0_28px_60px_-18px_rgba(11,102,228,0.4)]">
                 {/* Scenic Background Image */}
                 <img
-                  src={meta.image}
+                  src={item.image_url || meta.image}
                   alt={item.name}
                   className="absolute inset-0 h-full w-full object-cover brightness-[1.02] transition-transform duration-[1200ms] ease-out group-hover:scale-105"
                 />

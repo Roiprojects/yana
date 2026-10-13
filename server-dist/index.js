@@ -677,7 +677,7 @@ async function listAdminDestinations() {
 }
 async function listAdminServices() {
   const rows = await queryStrict(
-    `select id, name, slug, description, is_active, sort_order
+    `select id, name, slug, description, image_url, is_active, sort_order
        from services
       order by sort_order asc`
   );
@@ -790,7 +790,7 @@ async function listPublicFaqs() {
 }
 async function listPublicServices() {
   const rows = await queryStrict(
-    `select id, name, slug, description, is_active, sort_order
+    `select id, name, slug, description, image_url, is_active, sort_order
        from services
       where is_active = true
       order by sort_order asc`
@@ -896,15 +896,16 @@ async function saveServiceAction(body) {
   const name = str(body.name);
   const slug = str(body.slug) || slugify(name);
   const description = str(body.description);
+  const image_url = str(body.image_url) || null;
   if (id) {
     await queryStrict(
-      `update services set name=$1, slug=$2, description=$3 where id=$4`,
-      [name, slug, description, id]
+      `update services set name=$1, slug=$2, description=$3, image_url=$4 where id=$5`,
+      [name, slug, description, image_url, id]
     );
   } else {
     await queryStrict(
-      `insert into services (name, slug, description) values ($1, $2, $3)`,
-      [name, slug, description]
+      `insert into services (name, slug, description, image_url) values ($1, $2, $3, $4)`,
+      [name, slug, description, image_url]
     );
   }
   return { ok: true };
