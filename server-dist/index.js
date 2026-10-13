@@ -1,27 +1,56 @@
-var __defProp = Object.defineProperty;
-var __getOwnPropNames = Object.getOwnPropertyNames;
-var __esm = (fn, res) => function __init() {
-  return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
-};
-var __export = (target, all) => {
-  for (var name in all)
-    __defProp(target, name, { get: all[name], enumerable: true });
-};
+// server/index.ts
+import dotenv2 from "dotenv";
+import express from "express";
+import cors from "cors";
+import path2 from "node:path";
+import fs from "node:fs/promises";
+import { existsSync as existsSync2 } from "node:fs";
+import multer from "multer";
+import { fileURLToPath } from "node:url";
+
+// src/lib/schemas/enquiry.ts
+import { z } from "zod";
+var baseEnquirySchema = z.object({
+  name: z.string().min(2, "Please enter your name"),
+  phone: z.string().min(7, "Please enter a valid phone number").max(20, "Phone number looks too long"),
+  email: z.string().email("Enter a valid email").optional().or(z.literal("")),
+  // Empty optional number: treat "" as undefined so an empty field stays valid.
+  travellers: z.preprocess(
+    (v) => v === "" || v === null || v === void 0 ? void 0 : v,
+    z.coerce.number().int().min(1, "At least 1 traveller").max(100).optional()
+  ),
+  travelDate: z.string().optional(),
+  message: z.string().max(2e3).optional()
+});
+var generalEnquirySchema = baseEnquirySchema.extend({
+  type: z.literal("general").default("general"),
+  destinationInterest: z.string().optional()
+});
+var customizedEnquirySchema = baseEnquirySchema.extend({
+  type: z.literal("customized").default("customized"),
+  scope: z.enum(["domestic", "international"]).optional(),
+  budgetRange: z.string().optional(),
+  hotelCategory: z.string().optional()
+});
+var enquiryFormSchema = baseEnquirySchema.extend({
+  type: z.enum(["general", "customized"]).default("general"),
+  destinationInterest: z.string().optional(),
+  scope: z.enum(["domestic", "international"]).optional(),
+  budgetRange: z.string().optional(),
+  hotelCategory: z.string().optional()
+});
 
 // server/auth.ts
-var auth_exports = {};
-__export(auth_exports, {
-  AuthConfigError: () => AuthConfigError,
-  SESSION_COOKIE: () => SESSION_COOKIE,
-  clearSessionCookie: () => clearSessionCookie,
-  createSessionToken: () => createSessionToken,
-  readCookie: () => readCookie,
-  requireAdmin: () => requireAdmin,
-  setSessionCookie: () => setSessionCookie,
-  verifyCredentials: () => verifyCredentials,
-  verifySessionToken: () => verifySessionToken
-});
 import crypto from "node:crypto";
+var SESSION_COOKIE = "yana_admin";
+var MAX_AGE_SECONDS = 60 * 60 * 8;
+var clean = (v) => (v ?? "").trim().replace(/^["']|["']$/g, "");
+var AuthConfigError = class extends Error {
+  constructor(missing) {
+    super(`Auth configuration missing: ${missing}`);
+    this.name = "AuthConfigError";
+  }
+};
 function authEnv(name, fallbackDefault) {
   const v = clean(process.env[name]);
   if (v) return v;
@@ -114,66 +143,6 @@ async function requireAdmin(req, res, next) {
   res.locals.adminEmail = email;
   next();
 }
-var SESSION_COOKIE, MAX_AGE_SECONDS, clean, AuthConfigError;
-var init_auth = __esm({
-  "server/auth.ts"() {
-    "use strict";
-    SESSION_COOKIE = "yana_admin";
-    MAX_AGE_SECONDS = 60 * 60 * 8;
-    clean = (v) => (v ?? "").trim().replace(/^["']|["']$/g, "");
-    AuthConfigError = class extends Error {
-      constructor(missing) {
-        super(`Auth configuration missing: ${missing}`);
-        this.name = "AuthConfigError";
-      }
-    };
-  }
-});
-
-// server/index.ts
-import dotenv2 from "dotenv";
-import express from "express";
-import cors from "cors";
-import path2 from "node:path";
-import fs from "node:fs/promises";
-import { existsSync as existsSync2 } from "node:fs";
-import multer from "multer";
-import { fileURLToPath } from "node:url";
-
-// src/lib/schemas/enquiry.ts
-import { z } from "zod";
-var baseEnquirySchema = z.object({
-  name: z.string().min(2, "Please enter your name"),
-  phone: z.string().min(7, "Please enter a valid phone number").max(20, "Phone number looks too long"),
-  email: z.string().email("Enter a valid email").optional().or(z.literal("")),
-  // Empty optional number: treat "" as undefined so an empty field stays valid.
-  travellers: z.preprocess(
-    (v) => v === "" || v === null || v === void 0 ? void 0 : v,
-    z.coerce.number().int().min(1, "At least 1 traveller").max(100).optional()
-  ),
-  travelDate: z.string().optional(),
-  message: z.string().max(2e3).optional()
-});
-var generalEnquirySchema = baseEnquirySchema.extend({
-  type: z.literal("general").default("general"),
-  destinationInterest: z.string().optional()
-});
-var customizedEnquirySchema = baseEnquirySchema.extend({
-  type: z.literal("customized").default("customized"),
-  scope: z.enum(["domestic", "international"]).optional(),
-  budgetRange: z.string().optional(),
-  hotelCategory: z.string().optional()
-});
-var enquiryFormSchema = baseEnquirySchema.extend({
-  type: z.enum(["general", "customized"]).default("general"),
-  destinationInterest: z.string().optional(),
-  scope: z.enum(["domestic", "international"]).optional(),
-  budgetRange: z.string().optional(),
-  hotelCategory: z.string().optional()
-});
-
-// server/index.ts
-init_auth();
 
 // server/db.ts
 import dotenv from "dotenv";
@@ -856,6 +825,15 @@ async function listPublicOffices() {
   );
   return rows ?? [];
 }
+async function listPublicHeroSlides() {
+  const rows = await queryStrict(
+    `select id, title, subtitle, image_url, video_url, mobile_video_url, cta_primary_text, cta_primary_link, is_active, sort_order
+       from hero_slides
+      where is_active = true
+      order by sort_order asc`
+  );
+  return rows ?? [];
+}
 var SETTING_KEYS = ["site", "about", "seo"];
 async function listSiteSettings() {
   const rows = await queryStrict(
@@ -1210,11 +1188,10 @@ app.post("/api/auth/logout", (_req, res) => {
 app.get(
   "/api/auth/me",
   wrap(async (req, res) => {
-    const { SESSION_COOKIE: SESSION_COOKIE2, readCookie: readCookie2, verifySessionToken: verifySessionToken2 } = await Promise.resolve().then(() => (init_auth(), auth_exports));
-    const cookieToken = readCookie2(req, SESSION_COOKIE2);
+    const cookieToken = readCookie(req, SESSION_COOKIE);
     const authHeader = req.headers.authorization;
     const bearerToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7).trim() : void 0;
-    const email = await verifySessionToken2(cookieToken || bearerToken);
+    const email = await verifySessionToken(cookieToken || bearerToken);
     if (!email) {
       res.status(401).json({ ok: false });
       return;
@@ -1296,6 +1273,12 @@ app.get(
   "/api/public/departures",
   wrap(async (_req, res) => {
     res.json(await listPublicDepartures());
+  })
+);
+app.get(
+  "/api/public/hero-slides",
+  wrap(async (_req, res) => {
+    res.json(await listPublicHeroSlides());
   })
 );
 app.get(

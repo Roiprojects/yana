@@ -620,6 +620,16 @@ export async function listPublicOffices(): Promise<AdminOfficeRow[]> {
   return rows ?? [];
 }
 
+export async function listPublicHeroSlides(): Promise<AdminHeroRow[]> {
+  const rows = await query<AdminHeroRow>(
+    `select id, title, subtitle, image_url, video_url, mobile_video_url, cta_primary_text, cta_primary_link, is_active, sort_order
+       from hero_slides
+      where is_active = true
+      order by sort_order asc`,
+  );
+  return rows ?? [];
+}
+
 // ── Site Settings (key/value) ────────────────────────────────────────────────
 const SETTING_KEYS = ["site", "about", "seo"] as const;
 

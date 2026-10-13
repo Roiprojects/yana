@@ -1,9 +1,7 @@
-/**
- * A quiet scrolling ribbon of destination names. These are drawn from the
- * confirmed catalogue on the existing site (destinations Yana Travels offers) —
- * decorative, no prices or other invented claims.
- */
-const destinations = [
+import { useEffect, useState } from "react";
+import { api } from "@/lib/api/client";
+
+const fallbackDestinations = [
   "Kashmir",
   "Leh–Ladakh",
   "Kerala",
@@ -25,6 +23,28 @@ const destinations = [
 ];
 
 export function DestinationMarquee() {
+  const [destinations, setDestinations] = useState<string[]>(fallbackDestinations);
+
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .listPublicDestinations()
+      .then((items) => {
+        if (!cancelled && Array.isArray(items) && items.length > 0) {
+          const names = items
+            .map((d) => d.name?.trim())
+            .filter((name): name is string => Boolean(name));
+          if (names.length > 0) {
+            setDestinations(names);
+          }
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const row = [...destinations, ...destinations];
   return (
     <div className="border-y border-border-soft bg-bg-soft py-6">

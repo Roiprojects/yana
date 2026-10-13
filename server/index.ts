@@ -32,6 +32,9 @@ import {
   createSessionToken,
   setSessionCookie,
   clearSessionCookie,
+  SESSION_COOKIE,
+  readCookie,
+  verifySessionToken,
   AuthConfigError,
 } from "./auth.js";
 import {
@@ -228,8 +231,6 @@ app.post("/api/auth/logout", (_req, res) => {
 app.get(
   "/api/auth/me",
   wrap(async (req, res) => {
-    const { SESSION_COOKIE, readCookie, verifySessionToken } =
-      await import("./auth.js");
     const cookieToken = readCookie(req, SESSION_COOKIE);
     const authHeader = req.headers.authorization;
     const bearerToken = authHeader?.startsWith("Bearer ")
@@ -330,6 +331,13 @@ app.get(
   "/api/public/departures",
   wrap(async (_req, res) => {
     res.json(await admin.listPublicDepartures());
+  }),
+);
+
+app.get(
+  "/api/public/hero-slides",
+  wrap(async (_req, res) => {
+    res.json(await admin.listPublicHeroSlides());
   }),
 );
 

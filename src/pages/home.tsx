@@ -36,6 +36,7 @@ import {
 import { api } from "@/lib/api/client";
 import type { PackageListItem } from "@/lib/types/tour";
 import type { PublicFaq } from "@/lib/types/content";
+import type { AdminHeroRow } from "@/lib/types/admin";
 
 const categories = [
   {
@@ -122,6 +123,7 @@ const fallbackFaqs = [
 export function HomePage() {
   const [featured, setFeatured] = useState<PackageListItem[]>([]);
   const [faqs, setFaqs] = useState<PublicFaq[]>([]);
+  const [heroSlide, setHeroSlide] = useState<AdminHeroRow | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -142,6 +144,14 @@ export function HomePage() {
       .catch(() => {
         if (!cancelled) setFaqs([]);
       });
+    api
+      .listPublicHeroSlides()
+      .then((slides) => {
+        if (!cancelled && Array.isArray(slides) && slides.length > 0) {
+          setHeroSlide(slides[0]);
+        }
+      })
+      .catch(() => {});
     return () => {
       cancelled = true;
     };
@@ -156,15 +166,19 @@ export function HomePage() {
       <div className="px-0 pt-0">
         <section className="relative min-h-[100svh] overflow-hidden rounded-none border-0 bg-[linear-gradient(135deg,rgba(255,253,248,0.12),rgba(247,241,228,0.08))] shadow-[0_34px_80px_-42px_rgba(16,33,58,0.34)]">
           <HeroSlideshow
-            videoSrc="/hero/homepage-hero-real-16x9.mp4"
-            mobileVideoSrc="/hero/homepage-hero-real-9x16.mp4"
+            videoSrc={heroSlide?.video_url || "/hero/homepage-hero-real-16x9.mp4"}
+            mobileVideoSrc={heroSlide?.mobile_video_url || "/hero/homepage-hero-real-9x16.mp4"}
             poster="/hero/homepage-hero-real-16x9-poster.jpg"
             mobilePoster="/hero/homepage-hero-real-9x16-poster.jpg"
-            images={[
-              unsplash(heroImage, 2000),
-              collections[0].image,
-              collections[3].image,
-            ]}
+            images={
+              heroSlide?.image_url
+                ? [heroSlide.image_url]
+                : [
+                    unsplash(heroImage, 2000),
+                    collections[0].image,
+                    collections[3].image,
+                  ]
+            }
           />
           <div
             className="pointer-events-none absolute -left-12 top-16 h-56 w-56 rounded-full bg-[#e7d39a]/25 blur-3xl"
@@ -213,10 +227,23 @@ export function HomePage() {
               <div className="self-end lg:col-span-8">
                 <div className="max-w-4xl pl-2 pb-1 sm:pl-4 sm:p-2 sm:pb-2">
                   <h1 className="animate-rise font-display text-2xl font-semibold leading-[1.18] tracking-[-0.03em] text-yellow-400 drop-shadow-[0_18px_34px_rgba(0,0,0,0.65)] sm:text-3xl md:text-4xl lg:text-[2.5rem] xl:text-[2.9rem]">
-                    <span className="block sm:whitespace-nowrap">Traveling - it leaves you speechless,</span>
-                    <span className="block text-yellow-400 sm:whitespace-nowrap">
-                      then turns you into a story teller.
-                    </span>
+                    {heroSlide?.title ? (
+                      <>
+                        <span className="block sm:whitespace-nowrap">{heroSlide.title}</span>
+                        {heroSlide.subtitle && (
+                          <span className="block text-white/95 text-base sm:text-lg md:text-xl font-medium mt-2 drop-shadow-md">
+                            {heroSlide.subtitle}
+                          </span>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <span className="block sm:whitespace-nowrap">Traveling - it leaves you speechless,</span>
+                        <span className="block text-yellow-400 sm:whitespace-nowrap">
+                          then turns you into a story teller.
+                        </span>
+                      </>
+                    )}
                   </h1>
                 </div>
               </div>

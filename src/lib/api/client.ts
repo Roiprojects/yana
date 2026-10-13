@@ -6,7 +6,11 @@ import type {
   PublicTestimonial,
   SiteSettings,
 } from "@/lib/types/content";
-import type { AdminDepartureRow } from "@/lib/types/admin";
+import type {
+  AdminDepartureRow,
+  AdminHeroRow,
+  AdminDestinationRow,
+} from "@/lib/types/admin";
 import { siteConfig } from "@/lib/site-config";
 import generatedRaw from "@/lib/data/packages.generated.json";
 
@@ -543,7 +547,7 @@ export const api = {
       return [];
     }
   },
-  async listPublicDestinations(): Promise<unknown[]> {
+  async listPublicDestinations(): Promise<AdminDestinationRow[]> {
     try {
       const res = await apiFetch("/api/public/destinations");
       return await parse(res);
@@ -554,6 +558,14 @@ export const api = {
   async listPublicDepartures(): Promise<AdminDepartureRow[]> {
     try {
       const res = await apiFetch("/api/public/departures");
+      return await parse(res);
+    } catch {
+      return [];
+    }
+  },
+  async listPublicHeroSlides(): Promise<AdminHeroRow[]> {
+    try {
+      const res = await apiFetch("/api/public/hero-slides");
       return await parse(res);
     } catch {
       return [];
