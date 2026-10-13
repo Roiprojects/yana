@@ -6,6 +6,7 @@ import type {
   PublicTestimonial,
   SiteSettings,
 } from "@/lib/types/content";
+import type { AdminDepartureRow } from "@/lib/types/admin";
 import { siteConfig } from "@/lib/site-config";
 import generatedRaw from "@/lib/data/packages.generated.json";
 
@@ -545,6 +546,14 @@ export const api = {
   async listPublicDestinations(): Promise<unknown[]> {
     try {
       const res = await apiFetch("/api/public/destinations");
+      return await parse(res);
+    } catch {
+      return [];
+    }
+  },
+  async listPublicDepartures(): Promise<AdminDepartureRow[]> {
+    try {
+      const res = await apiFetch("/api/public/departures");
       return await parse(res);
     } catch {
       return [];

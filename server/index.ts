@@ -327,6 +327,13 @@ app.get(
 );
 
 app.get(
+  "/api/public/departures",
+  wrap(async (_req, res) => {
+    res.json(await admin.listPublicDepartures());
+  }),
+);
+
+app.get(
   "/api/public/settings",
   wrap(async (_req, res) => {
     res.json(await admin.listSiteSettings());
@@ -511,6 +518,10 @@ const MODULES: Record<
   curated_themes: {
     list: admin.listAdminThemes,
     save: admin.saveThemeAction,
+  },
+  departures: {
+    list: admin.listAdminDepartures,
+    save: admin.saveDepartureAction,
   },
 };
 

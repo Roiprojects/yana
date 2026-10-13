@@ -201,4 +201,22 @@ create table if not exists curated_themes (
   updated_at  timestamptz not null default now()
 );
 
+-- Departures / Fixed Departure Batches
+create table if not exists departures (
+  id                uuid primary key default gen_random_uuid(),
+  title             text not null,
+  package_slug      text,
+  departure_date    text not null,
+  return_date       text,
+  boarding_point    text,
+  price             text,
+  seats_available   text default 'Available',
+  status            text default 'Available',
+  image_url         text,
+  is_active         boolean not null default true,
+  sort_order        int not null default 0,
+  created_at        timestamptz not null default now(),
+  updated_at        timestamptz not null default now()
+);
+
 

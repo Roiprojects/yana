@@ -145,3 +145,18 @@ export type AdminHeroRow = {
   is_active: boolean;
   sort_order: number;
 };
+
+export type AdminDepartureRow = {
+  id: string;
+  title: string;
+  package_slug: string | null;
+  departure_date: string;
+  return_date: string | null;
+  boarding_point: string | null;
+  price: string | null;
+  seats_available: string | null;
+  status: string | null;
+  image_url: string | null;
+  is_active: boolean;
+  sort_order: number;
+};

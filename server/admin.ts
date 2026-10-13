@@ -498,6 +498,67 @@ export async function saveThemeAction(body: Record<string, unknown>) {
   return { ok: true };
 }
 
+// ── Departures ───────────────────────────────────────────────────────────────
+export type AdminDepartureRow = {
+  id: string;
+  title: string;
+  package_slug: string | null;
+  departure_date: string;
+  return_date: string | null;
+  boarding_point: string | null;
+  price: string | null;
+  seats_available: string | null;
+  status: string | null;
+  image_url: string | null;
+  is_active: boolean;
+  sort_order: number;
+};
+
+export async function listAdminDepartures(): Promise<AdminDepartureRow[]> {
+  const rows = await query<AdminDepartureRow>(
+    `select id, title, package_slug, departure_date, return_date, boarding_point, price, seats_available, status, image_url, is_active, sort_order
+       from departures
+      order by sort_order asc, created_at desc`,
+  );
+  return rows ?? [];
+}
+
+export async function listPublicDepartures(): Promise<AdminDepartureRow[]> {
+  const rows = await query<AdminDepartureRow>(
+    `select id, title, package_slug, departure_date, return_date, boarding_point, price, seats_available, status, image_url, is_active, sort_order
+       from departures
+      where is_active = true
+      order by sort_order asc, created_at desc`,
+  );
+  return rows ?? [];
+}
+
+export async function saveDepartureAction(body: Record<string, unknown>) {
+  const id = str(body.id) || null;
+  const title = str(body.title);
+  const package_slug = str(body.package_slug) || null;
+  const departure_date = str(body.departure_date);
+  const return_date = str(body.return_date) || null;
+  const boarding_point = str(body.boarding_point) || null;
+  const price = str(body.price) || null;
+  const seats_available = str(body.seats_available) || "Available";
+  const status = str(body.status) || "Available";
+  const image_url = str(body.image_url) || null;
+
+  if (id) {
+    await query(
+      `update departures set title=$1, package_slug=$2, departure_date=$3, return_date=$4, boarding_point=$5, price=$6, seats_available=$7, status=$8, image_url=$9, updated_at=now() where id=$10`,
+      [title, package_slug, departure_date, return_date, boarding_point, price, seats_available, status, image_url, id],
+    );
+  } else {
+    await query(
+      `insert into departures (title, package_slug, departure_date, return_date, boarding_point, price, seats_available, status, image_url) values ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [title, package_slug, departure_date, return_date, boarding_point, price, seats_available, status, image_url],
+    );
+  }
+  return { ok: true };
+}
+
 // ── Public Fetchers ─────────────────────────────────────────────────────────
 export async function listPublicDestinations(): Promise<AdminDestinationRow[]> {
   const rows = await query<AdminDestinationRow>(
@@ -597,6 +658,7 @@ const ALLOWED_TABLES = [
   "contact_info",
   "hero_slides",
   "curated_themes",
+  "departures",
 ] as const;
 
 export function assertTable(table: string): void {

@@ -761,6 +761,47 @@ async function saveThemeAction(body) {
   }
   return { ok: true };
 }
+async function listAdminDepartures() {
+  const rows = await queryStrict(
+    `select id, title, package_slug, departure_date, return_date, boarding_point, price, seats_available, status, image_url, is_active, sort_order
+       from departures
+      order by sort_order asc, created_at desc`
+  );
+  return rows ?? [];
+}
+async function listPublicDepartures() {
+  const rows = await queryStrict(
+    `select id, title, package_slug, departure_date, return_date, boarding_point, price, seats_available, status, image_url, is_active, sort_order
+       from departures
+      where is_active = true
+      order by sort_order asc, created_at desc`
+  );
+  return rows ?? [];
+}
+async function saveDepartureAction(body) {
+  const id = str(body.id) || null;
+  const title = str(body.title);
+  const package_slug = str(body.package_slug) || null;
+  const departure_date = str(body.departure_date);
+  const return_date = str(body.return_date) || null;
+  const boarding_point = str(body.boarding_point) || null;
+  const price = str(body.price) || null;
+  const seats_available = str(body.seats_available) || "Available";
+  const status = str(body.status) || "Available";
+  const image_url = str(body.image_url) || null;
+  if (id) {
+    await queryStrict(
+      `update departures set title=$1, package_slug=$2, departure_date=$3, return_date=$4, boarding_point=$5, price=$6, seats_available=$7, status=$8, image_url=$9, updated_at=now() where id=$10`,
+      [title, package_slug, departure_date, return_date, boarding_point, price, seats_available, status, image_url, id]
+    );
+  } else {
+    await queryStrict(
+      `insert into departures (title, package_slug, departure_date, return_date, boarding_point, price, seats_available, status, image_url) values ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [title, package_slug, departure_date, return_date, boarding_point, price, seats_available, status, image_url]
+    );
+  }
+  return { ok: true };
+}
 async function listPublicDestinations() {
   const rows = await queryStrict(
     `select id, name, slug, scope, country, description, image_url, is_featured, is_active, sort_order
@@ -844,7 +885,8 @@ var ALLOWED_TABLES = [
   "faqs",
   "contact_info",
   "hero_slides",
-  "curated_themes"
+  "curated_themes",
+  "departures"
 ];
 function assertTable(table) {
   if (!ALLOWED_TABLES.includes(table)) {
@@ -1251,6 +1293,12 @@ app.get(
   })
 );
 app.get(
+  "/api/public/departures",
+  wrap(async (_req, res) => {
+    res.json(await listPublicDepartures());
+  })
+);
+app.get(
   "/api/public/settings",
   wrap(async (_req, res) => {
     res.json(await listSiteSettings());
@@ -1412,6 +1460,10 @@ var MODULES = {
   curated_themes: {
     list: listAdminThemes,
     save: saveThemeAction
+  },
+  departures: {
+    list: listAdminDepartures,
+    save: saveDepartureAction
   }
 };
 app.get(
