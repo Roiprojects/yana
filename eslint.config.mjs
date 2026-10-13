@@ -8,15 +8,31 @@ export default tseslint.config(
   {
     ignores: [
       "dist/**",
+      "server-dist/**",
+      "scripts/**",
       "node_modules/**",
       "coverage/**",
       "test-results/**",
       "playwright-report/**",
       "*.tsbuildinfo",
+      "app.cjs",
     ],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
+  {
+    rules: {
+      "@typescript-eslint/no-unused-vars": [
+        "warn",
+        {
+          argsIgnorePattern: "^_",
+          varsIgnorePattern: "^_",
+          caughtErrorsIgnorePattern: "^_",
+        },
+      ],
+      "@typescript-eslint/no-require-imports": "off",
+    },
+  },
   {
     files: ["**/*.{ts,tsx}"],
     languageOptions: {

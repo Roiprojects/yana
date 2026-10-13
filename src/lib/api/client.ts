@@ -417,7 +417,9 @@ function setStoredToken(token: string | null) {
       localStorage.removeItem(TOKEN_KEY);
       sessionStorage.removeItem(TOKEN_KEY);
     }
-  } catch {}
+  } catch {
+    // Ignore storage errors in restricted iframe/browser modes
+  }
 }
 
 /** Clear message when the host returned HTML instead of the Node API. */

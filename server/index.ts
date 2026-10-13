@@ -112,6 +112,25 @@ app.use(
 );
 app.use(express.json({ limit: "2mb" }));
 
+// In serverless environments (e.g. Vercel / proxy rewrites), the route might arrive without the /api prefix.
+app.use((req, _res, next) => {
+  if (
+    !req.url.startsWith("/api/") &&
+    (req.url.startsWith("/auth/") ||
+      req.url.startsWith("/packages") ||
+      req.url.startsWith("/admin/") ||
+      req.url.startsWith("/enquiries") ||
+      req.url.startsWith("/site-settings") ||
+      req.url.startsWith("/testimonials") ||
+      req.url.startsWith("/destinations") ||
+      req.url.startsWith("/health") ||
+      req.url.startsWith("/upload"))
+  ) {
+    req.url = `/api${req.url}`;
+  }
+  next();
+});
+
 // Serve uploaded files and public assets.
 const publicDir = path.resolve(__dirname, "..", "public");
 app.use(express.static(publicDir));

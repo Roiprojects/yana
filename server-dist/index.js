@@ -1070,6 +1070,12 @@ app.use(
   })
 );
 app.use(express.json({ limit: "2mb" }));
+app.use((req, _res, next) => {
+  if (!req.url.startsWith("/api/") && (req.url.startsWith("/auth/") || req.url.startsWith("/packages") || req.url.startsWith("/admin/") || req.url.startsWith("/enquiries") || req.url.startsWith("/site-settings") || req.url.startsWith("/testimonials") || req.url.startsWith("/destinations") || req.url.startsWith("/health") || req.url.startsWith("/upload"))) {
+    req.url = `/api${req.url}`;
+  }
+  next();
+});
 var publicDir = path2.resolve(__dirname, "..", "public");
 app.use(express.static(publicDir));
 var distDir = path2.resolve(__dirname, "..", "dist");
