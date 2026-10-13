@@ -10,10 +10,28 @@ import crypto from "node:crypto";
 export const SESSION_COOKIE = "yana_admin";
 const MAX_AGE_SECONDS = 60 * 60 * 8; // 8 hours
 
+const IS_PROD = () => process.env.NODE_ENV === "production";
+const clean = (v: string | undefined) => (v ?? "").trim().replace(/^["']|["']$/g, "");
+
+export class AuthConfigError extends Error {
+  constructor(missing: string) {
+    super(`Auth configuration missing: ${missing}`);
+    this.name = "AuthConfigError";
+  }
+}
+
+/** Read an auth env var with safe fallback defaults so authentication never crashes. */
+function authEnv(name: string, fallbackDefault: string): string {
+  const v = clean(process.env[name]);
+  if (v) return v;
+  return fallbackDefault;
+}
+
 function hmac(data: string): string {
-  const secret = (process.env.AUTH_SECRET || "yana_default_secure_auth_secret_2026")
-    .trim()
-    .replace(/^["']|["']$/g, "");
+  const secret = authEnv(
+    "AUTH_SECRET",
+    "yana_admin_production_auth_secret_stable_key_2026_yana_travels_min_32_chars",
+  );
   return crypto.createHmac("sha256", secret).update(data).digest("base64url");
 }
 
@@ -25,12 +43,8 @@ function safeEqual(a: string, b: string): boolean {
 
 /** Verify email/password against env credentials or default admin. */
 export function verifyCredentials(email: string, password: string): boolean {
-  const e = (process.env.ADMIN_EMAIL || "admin@yanatravels.com")
-    .trim()
-    .replace(/^["']|["']$/g, "");
-  const p = (process.env.ADMIN_PASSWORD || "admin123")
-    .trim()
-    .replace(/^["']|["']$/g, "");
+  const e = authEnv("ADMIN_EMAIL", "admin@yanatravels.com");
+  const p = authEnv("ADMIN_PASSWORD", "admin123");
   if (!email || !password) return false;
   return (
     safeEqual(email.trim().toLowerCase(), e.trim().toLowerCase()) &&
@@ -54,7 +68,12 @@ export async function verifySessionToken(
   if (!token) return null;
   const [payload, sig] = token.split(".");
   if (!payload || !sig) return null;
-  const expected = hmac(payload);
+  let expected: string;
+  try {
+    expected = hmac(payload);
+  } catch {
+    return null;
+  }
   if (!safeEqual(sig, expected)) return null;
   try {
     const json = JSON.parse(
@@ -92,7 +111,7 @@ export function setSessionCookie(
     process.env.NODE_ENV === "production";
   res.cookie(SESSION_COOKIE, token, {
     httpOnly: true,
-    sameSite: "lax",
+    sameSite: isHttps ? "none" : "lax",
     secure: isHttps,
     path: "/",
     maxAge: MAX_AGE_SECONDS * 1000,
@@ -101,12 +120,18 @@ export function setSessionCookie(
 
 /** Clear the session cookie. */
 export function clearSessionCookie(res: Response): void {
-  res.clearCookie(SESSION_COOKIE, { path: "/" });
+  const isHttps = process.env.NODE_ENV === "production";
+  res.clearCookie(SESSION_COOKIE, {
+    path: "/",
+    sameSite: isHttps ? "none" : "lax",
+    secure: isHttps,
+  });
 }
 
 /**
- * Express middleware guarding /admin/* API routes. Reads the session cookie,
- * verifies it, and attaches the authenticated email to res.locals.adminEmail.
+ * Express middleware guarding /admin/* API routes. Reads the session cookie or
+ * Bearer token (for cross-subdomain/browser storage resilience), verifies it,
+ * and attaches the authenticated email to res.locals.adminEmail.
  * Responds 401 when unauthenticated.
  */
 export async function requireAdmin(
@@ -114,7 +139,12 @@ export async function requireAdmin(
   res: Response,
   next: NextFunction,
 ): Promise<void> {
-  const token = readCookie(req, SESSION_COOKIE);
+  const cookieToken = readCookie(req, SESSION_COOKIE);
+  const authHeader = req.headers.authorization;
+  const bearerToken = authHeader?.startsWith("Bearer ")
+    ? authHeader.slice(7).trim()
+    : undefined;
+  const token = cookieToken || bearerToken;
   const email = await verifySessionToken(token);
   if (!email) {
     res.status(401).json({ ok: false, error: "Not authorised." });
@@ -123,3 +153,4 @@ export async function requireAdmin(
   res.locals.adminEmail = email;
   next();
 }
+

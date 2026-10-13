@@ -137,11 +137,17 @@ export function AboutPage() {
     };
   }, []);
 
-  const headline = about.headline || "Welcome to Yana Travels";
+  const headline = about?.headline || "Welcome to Yana Travels";
 
-  const intro =
-    about.intro && about.intro.length > 0
-      ? about.intro
+  const rawIntro = about?.intro;
+  const intro: string[] =
+    Array.isArray(rawIntro) && rawIntro.length > 0
+      ? rawIntro
+      : typeof rawIntro === "string" && rawIntro.trim().length > 0
+      ? rawIntro
+          .split(/\n+/)
+          .map((s) => s.trim())
+          .filter(Boolean)
       : [
           `Yana Travels was founded in ${founded}. We are a team of travel experts with deep knowledge of historic, scenic, and culturally rich destinations across India and abroad.`,
           "We understand the importance of your time, and our aim is to make every getaway memorable. Be it a personal holiday, a leisure tour, or a corporate travel plan, we work to balance comfort, coordination, and value while keeping the journey smooth from start to finish.",
@@ -149,7 +155,7 @@ export function AboutPage() {
         ];
 
   const values: { title: string; desc: string; icon?: typeof Compass }[] =
-    about.values && about.values.length > 0
+    Array.isArray(about?.values) && about.values.length > 0
       ? about.values.map((v) => ({ title: v.title, desc: v.desc }))
       : fallbackValues;
 

@@ -24,9 +24,9 @@ export function PackageForm({ pkg }: { pkg: EditablePackage | null }) {
   const [availableThemes, setAvailableThemes] = useState<{ id: string; title: string }[]>([]);
 
   useEffect(() => {
-    fetch("/api/public/themes")
-      .then((res) => res.json())
-      .then((data) => {
+    api
+      .listPublicThemes()
+      .then((data: any) => {
         if (Array.isArray(data)) {
           setAvailableThemes(data.map((t) => ({ id: t.id, title: t.title })));
         }

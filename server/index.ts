@@ -1,4 +1,4 @@
-import "dotenv/config";
+import dotenv from "dotenv";
 import express, { type Request, type Response } from "express";
 import cors from "cors";
 import path from "node:path";
@@ -6,6 +6,25 @@ import fs from "node:fs/promises";
 import { existsSync } from "node:fs";
 import multer from "multer";
 import { fileURLToPath } from "node:url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// Robust environment file discovery across diverse hosting setups
+for (const p of [
+  path.resolve(process.cwd(), ".env"),
+  path.resolve(process.cwd(), ".env.hosting"),
+  path.resolve(process.cwd(), ".env.production"),
+  path.resolve(__dirname, "..", ".env"),
+  path.resolve(__dirname, "..", ".env.hosting"),
+  path.resolve(__dirname, ".env"),
+]) {
+  if (existsSync(p)) {
+    dotenv.config({ path: p });
+    break;
+  }
+}
+dotenv.config();
+
 import { enquiryFormSchema } from "../src/lib/schemas/enquiry.js";
 import {
   requireAdmin,
@@ -13,6 +32,7 @@ import {
   createSessionToken,
   setSessionCookie,
   clearSessionCookie,
+  AuthConfigError,
 } from "./auth.js";
 import {
   listPackages,
@@ -20,13 +40,76 @@ import {
   type PackageFilters,
 } from "./packages.js";
 import * as admin from "./admin.js";
-import { query, hasDb } from "./db.js";
+import { query, hasDb, pingDb, closeDb, DatabaseUnavailableError } from "./db.js";
+import { log } from "./logger.js";
+import crypto from "node:crypto";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
+const IS_PROD = process.env.NODE_ENV === "production";
 
-app.set("trust proxy", 1);
-app.use(cors({ origin: true, credentials: true }));
+// ── Startup configuration validation (names only, never values) ─────────────
+const hasDbConfig = Boolean(
+  process.env.DATABASE_URL ||
+  (process.env.DB_NAME && process.env.DB_USER) ||
+  hasDb()
+);
+const missingEnv: string[] = [];
+if (!hasDbConfig) missingEnv.push("DATABASE_URL");
+if (missingEnv.length) {
+  log[IS_PROD ? "error" : "warn"]("config.missing_env", { category: "config", missing: missingEnv });
+}
+
+
+// Trust exactly one reverse proxy hop (cPanel Apache/Passenger or Nginx) so
+// req.secure reflects HTTPS. Override with TRUST_PROXY (e.g. "loopback").
+const trustProxy = process.env.TRUST_PROXY ?? "1";
+app.set("trust proxy", /^\d+$/.test(trustProxy) ? Number(trustProxy) : trustProxy);
+app.disable("x-powered-by");
+
+// Request ID for log correlation.
+app.use((req, res, next) => {
+  const id = (req.headers["x-request-id"] as string) || crypto.randomUUID();
+  res.locals.requestId = id;
+  res.setHeader("X-Request-Id", id);
+  next();
+});
+
+// API responses must never be cached by browsers/CDNs, so admin edits show
+// up for every visitor immediately.
+app.use("/api", (_req, res, next) => {
+  res.setHeader("Cache-Control", "no-store");
+  next();
+});
+
+// CORS: dynamic origin validation allowing yanaindia.com and all subdomains,
+// roiclients.co.in and all subdomains, localhost, and custom ALLOWED_ORIGINS.
+function isAllowedOrigin(origin: string | undefined): boolean {
+  if (!origin) return true; // curl, Postman, server-to-server, same-origin
+  try {
+    const { hostname } = new URL(origin);
+    const h = hostname.toLowerCase();
+    if (h === "yanaindia.com" || h.endsWith(".yanaindia.com")) return true;
+    if (h === "roiclients.co.in" || h.endsWith(".roiclients.co.in")) return true;
+    if (h === "localhost" || h === "127.0.0.1" || h.startsWith("192.168.")) return true;
+    if (process.env.ALLOWED_ORIGINS) {
+      const extra = process.env.ALLOWED_ORIGINS.split(",").map((s) => s.trim().toLowerCase());
+      if (extra.includes(origin.toLowerCase()) || extra.includes(h)) return true;
+    }
+  } catch {
+    return false;
+  }
+  return false;
+}
+
+app.use(
+  cors({
+    origin: (origin, cb) => {
+      if (isAllowedOrigin(origin)) return cb(null, true);
+      cb(null, false);
+    },
+    credentials: true,
+  }),
+);
 app.use(express.json({ limit: "2mb" }));
 
 // Serve uploaded files and public assets.
@@ -43,10 +126,52 @@ const wrap =
   (fn: (req: Request, res: Response) => Promise<unknown>) =>
   (req: Request, res: Response) => {
     fn(req, res).catch((err) => {
-      console.error("[api]", err);
-      res.status(500).json({ ok: false, error: "Internal server error." });
+      const e = err as Error;
+      const dbDown = e instanceof DatabaseUnavailableError;
+      const cfg = e instanceof AuthConfigError;
+      log.error("api.error", {
+        requestId: res.locals.requestId,
+        method: req.method,
+        path: req.path,
+        category: dbDown ? "database_unavailable" : cfg ? "config" : "unexpected",
+        message: e?.message,
+        stack: e?.stack,
+      });
+      if (res.headersSent) return;
+      if (cfg) {
+        res.status(503).json({ ok: false, error: "Server is not fully configured. Contact the site administrator.", requestId: res.locals.requestId });
+        return;
+      }
+      if (dbDown) {
+        res.status(503).json({
+          ok: false,
+          error: "Database is temporarily unavailable. Please try again shortly.",
+          requestId: res.locals.requestId,
+        });
+        return;
+      }
+      res.status(500).json({ ok: false, error: "Internal server error.", requestId: res.locals.requestId });
     });
   };
+
+// ── Health ───────────────────────────────────────────────────────────────────
+// Liveness: process is up. No DB, no secrets.
+app.get("/api/health", (_req, res) => {
+  res.json({ ok: true, status: "up" });
+});
+// Readiness: verifies DB connectivity. Reports only booleans/latency.
+app.get(
+  "/api/ready",
+  wrap(async (_req, res) => {
+    const db = await pingDb();
+    const ready = db.ok && missingEnv.length === 0;
+    res.status(ready ? 200 : 503).json({
+      ok: ready,
+      database: db.ok ? "up" : "down",
+      config: missingEnv.length === 0 ? "ok" : "incomplete",
+    });
+  }),
+);
 
 // ── Auth ─────────────────────────────────────────────────────────────────────
 // Gracefully handle GET requests to /api/auth/login by redirecting to the admin login UI
@@ -60,13 +185,19 @@ app.post(
     const email = typeof req.body?.email === "string" ? req.body.email.trim() : "";
     const password =
       typeof req.body?.password === "string" ? req.body.password : "";
+    if (!email || !password) {
+      res.status(400).json({ ok: false, error: "Email and password are required." });
+      return;
+    }
     if (!verifyCredentials(email, password)) {
+      log.warn("auth.login_failed", { requestId: res.locals.requestId, category: "auth", ip: req.ip });
       res.status(401).json({ ok: false, error: "Invalid email or password." });
       return;
     }
+    log.info("auth.login_success", { requestId: res.locals.requestId, category: "auth" });
     const token = await createSessionToken(email.toLowerCase());
     setSessionCookie(req, res, token);
-    res.json({ ok: true });
+    res.json({ ok: true, token });
   }),
 );
 
@@ -80,7 +211,12 @@ app.get(
   wrap(async (req, res) => {
     const { SESSION_COOKIE, readCookie, verifySessionToken } =
       await import("./auth.js");
-    const email = await verifySessionToken(readCookie(req, SESSION_COOKIE));
+    const cookieToken = readCookie(req, SESSION_COOKIE);
+    const authHeader = req.headers.authorization;
+    const bearerToken = authHeader?.startsWith("Bearer ")
+      ? authHeader.slice(7).trim()
+      : undefined;
+    const email = await verifySessionToken(cookieToken || bearerToken);
     if (!email) {
       res.status(401).json({ ok: false });
       return;
@@ -462,10 +598,28 @@ app.use((req, res, _next) => {
 });
 
 if (!process.env.VERCEL) {
-  const PORT = Number(process.env.PORT || 4000);
-  app.listen(PORT, () => {
-    console.log(`[api] listening on http://localhost:${PORT}`);
+  // PORT may be a number or (under cPanel Passenger) a socket path.
+  const PORT = process.env.PORT || "4000";
+  const server = app.listen(/^\d+$/.test(PORT) ? Number(PORT) : PORT, () => {
+    log.info("server.started", {
+      port: PORT,
+      nodeEnv: process.env.NODE_ENV || "development",
+      database: hasDb() ? "configured" : "not_configured",
+    });
+    void pingDb().then((r) =>
+      log[r.ok ? "info" : "error"]("db.startup_check", { category: "database", ok: r.ok, latencyMs: r.latencyMs }),
+    );
   });
+  const shutdown = (signal: string) => {
+    log.info("server.shutdown", { signal });
+    server.close(() => void closeDb().finally(() => process.exit(0)));
+    setTimeout(() => process.exit(1), 10_000).unref();
+  };
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
+  process.on("SIGINT", () => shutdown("SIGINT"));
+  process.on("unhandledRejection", (r) =>
+    log.error("process.unhandled_rejection", { message: String((r as Error)?.message ?? r) }),
+  );
 }
 
 export default app;

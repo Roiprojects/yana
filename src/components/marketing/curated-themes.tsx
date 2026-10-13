@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Reveal } from "@/components/ui/reveal";
+import { api } from "@/lib/api/client";
 
 export interface ThemeCollection {
   title: string;
@@ -189,9 +190,9 @@ export function CuratedThemes() {
   const browseDropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    fetch("/api/public/themes")
-      .then((res) => res.json())
-      .then((data: any[]) => {
+    api
+      .listPublicThemes()
+      .then((data: any) => {
         if (Array.isArray(data) && data.length > 0) {
           const mapped: ThemeCollection[] = data.map((t) => ({
             title: t.title,

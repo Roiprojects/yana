@@ -71,11 +71,23 @@ export function AboutClient() {
       .then((res: SiteSettings) => {
         if (cancelled) return;
         const about: AboutContent = res.about ?? {};
+        const rawIntro = about.intro;
+        const introStr = Array.isArray(rawIntro)
+          ? rawIntro.join("\n")
+          : typeof rawIntro === "string"
+          ? rawIntro
+          : "";
+        const rawOfferings = about.offerings;
+        const offeringsStr = Array.isArray(rawOfferings)
+          ? rawOfferings.join("\n")
+          : typeof rawOfferings === "string"
+          ? rawOfferings
+          : "";
         setForm({
           headline: about.headline ?? "",
-          intro: (about.intro ?? []).join("\n"),
-          offerings: (about.offerings ?? []).join("\n"),
-          values: about.values ?? [],
+          intro: introStr,
+          offerings: offeringsStr,
+          values: Array.isArray(about.values) ? about.values : [],
         });
       })
       .catch(() => {

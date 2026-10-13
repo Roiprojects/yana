@@ -301,10 +301,10 @@ export async function listPackages(
     params,
   );
 
-  if (rows && rows.length > 0) {
+  if (rows) {
     return { items: rows.map(dbRowToListItem), sample: false };
   }
-  return { items: localList(filters), sample: false };
+  return { items: [], sample: false };
 }
 
 export async function getPackageBySlug(
@@ -369,6 +369,5 @@ export async function getPackageBySlug(
     };
   }
 
-  const index = generated.findIndex((p) => p.slug === slug);
-  return index >= 0 ? toDetail(generated[index], index) : null;
+  return null;
 }

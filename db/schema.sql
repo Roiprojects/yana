@@ -11,6 +11,7 @@ create table if not exists tour_packages (
   tour_type         text not null check (tour_type in ('group','customized')),
   group_subtype     text check (group_subtype in ('standard','kitchen_staff')),
   category_name     text,
+  theme_name        text,
   destination_name  text,
   country           text,
   duration_days     int,
@@ -173,4 +174,20 @@ create table if not exists site_settings (
   value      jsonb not null,
   updated_at timestamptz not null default now()
 );
+
+-- Curated Themes
+create table if not exists curated_themes (
+  id          uuid primary key default gen_random_uuid(),
+  title       text not null,
+  tag         text not null default '',
+  blurb       text not null default '',
+  href        text not null default '/packages',
+  image_url   text not null default '',
+  scope       text not null default 'all',
+  is_active   boolean not null default true,
+  sort_order  int not null default 0,
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now()
+);
+
 

@@ -393,31 +393,96 @@ export type ListPackagesResult = {
   sample: boolean;
 };
 
+const API_BASE = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
+const TOKEN_KEY = "yana_admin_token";
+
+function getStoredToken(): string | null {
+  try {
+    return (
+      localStorage.getItem(TOKEN_KEY) ||
+      sessionStorage.getItem(TOKEN_KEY) ||
+      null
+    );
+  } catch {
+    return null;
+  }
+}
+
+function setStoredToken(token: string | null) {
+  try {
+    if (token) {
+      localStorage.setItem(TOKEN_KEY, token);
+      sessionStorage.setItem(TOKEN_KEY, token);
+    } else {
+      localStorage.removeItem(TOKEN_KEY);
+      sessionStorage.removeItem(TOKEN_KEY);
+    }
+  } catch {}
+}
+
+/** Clear message when the host returned HTML instead of the Node API. */
+function backendDown(res: Response): Error | null {
+  const ct = res.headers.get("content-type") || "";
+  if (ct.includes("application/json")) return null;
+  return new Error(
+    `Admin API is not reachable (HTTP ${res.status}). The Node.js server is not running on this host.`,
+  );
+}
+
+/**
+ * Resilient fetch wrapper:
+ * - Automatically sends credentials (cookies) on both same-origin and cross-subdomain requests.
+ * - Automatically attaches Authorization: Bearer <token> for browsers restricting cross-site cookies.
+ * - Supports VITE_API_URL if frontend and API are hosted on different subdomains/domains.
+ */
+async function apiFetch(input: string, init: RequestInit = {}): Promise<Response> {
+  const url = input.startsWith("http") ? input : `${API_BASE}${input}`;
+  const headers = new Headers(init.headers || {});
+  const token = getStoredToken();
+  if (token && !headers.has("Authorization")) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+  return fetch(url, {
+    ...init,
+    headers,
+    credentials: "include",
+  });
+}
+
 export const api = {
-  // ── Auth ───────────────────────────────────────────────────────────────
-  async login(email: string, password: string): Promise<{ ok: boolean }> {
-    const res = await fetch("/api/auth/login", {
+  // ── Auth (dual cookie + bearer token for cross-subdomain resilience) ───────
+  async login(email: string, password: string): Promise<{ ok: boolean; token?: string }> {
+    const res = await apiFetch("/api/auth/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password }),
     });
-    return parse(res);
+    const down = backendDown(res);
+    if (down) throw down;
+    const data = await parse<{ ok: boolean; token?: string }>(res);
+    if (data.token) setStoredToken(data.token);
+    return data;
   },
   async logout(): Promise<{ ok: boolean }> {
-    const res = await fetch("/api/auth/logout", { method: "POST" });
-    return parse(res);
+    setStoredToken(null);
+    try {
+      const res = await apiFetch("/api/auth/logout", { method: "POST" });
+      return parse(res);
+    } catch {
+      return { ok: true };
+    }
   },
   async me(): Promise<{ ok: boolean; email?: string }> {
-    const res = await fetch("/api/auth/me");
+    const res = await apiFetch("/api/auth/me");
     return parse(res);
   },
 
-  // ── Public packages ────────────────────────────────────────────────────
+  // ── Public packages ──────────────────────────────────────────────────────────
   async listPackages(
     filters: PackageListQuery = {},
   ): Promise<ListPackagesResult> {
     try {
-      const res = await fetch(
+      const res = await apiFetch(
         `/api/packages${qs({
           scope: filters.scope,
           tourType: filters.tourType,
@@ -428,26 +493,20 @@ export const api = {
       return await parse<ListPackagesResult>(res);
     } catch {
       return {
-        items: localList(filters),
+        items: [],
         sample: false,
       };
     }
   },
   async getPackage(slug: string): Promise<PackageDetail> {
-    try {
-      const res = await fetch(`/api/packages/${encodeURIComponent(slug)}`);
-      return await parse<PackageDetail>(res);
-    } catch {
-      const local = localDetail(slug);
-      if (local) return local;
-      throw new Error(`Package not found: ${slug}`);
-    }
+    const res = await apiFetch(`/api/packages/${encodeURIComponent(slug)}`);
+    return await parse<PackageDetail>(res);
   },
 
-  // ── Public content ─────────────────────────────────────────────────────
+  // ── Public content ──────────────────────────────────────────────────────────
   async listPublicServices(): Promise<unknown[]> {
     try {
-      const res = await fetch("/api/public/services");
+      const res = await apiFetch("/api/public/services");
       return await parse(res);
     } catch {
       return [];
@@ -455,7 +514,23 @@ export const api = {
   },
   async listPublicFaqs(): Promise<PublicFaq[]> {
     try {
-      const res = await fetch("/api/public/faqs");
+      const res = await apiFetch("/api/public/faqs");
+      return await parse(res);
+    } catch {
+      return [];
+    }
+  },
+  async listPublicThemes(): Promise<unknown[]> {
+    try {
+      const res = await apiFetch("/api/public/themes");
+      return await parse(res);
+    } catch {
+      return [];
+    }
+  },
+  async listPublicDestinations(): Promise<unknown[]> {
+    try {
+      const res = await apiFetch("/api/public/destinations");
       return await parse(res);
     } catch {
       return [];
@@ -463,7 +538,7 @@ export const api = {
   },
   async listPublicTestimonials(): Promise<PublicTestimonial[]> {
     try {
-      const res = await fetch("/api/public/testimonials");
+      const res = await apiFetch("/api/public/testimonials");
       return await parse(res);
     } catch {
       return [];
@@ -471,7 +546,7 @@ export const api = {
   },
   async listPublicGallery(): Promise<PublicGalleryItem[]> {
     try {
-      const res = await fetch("/api/public/gallery");
+      const res = await apiFetch("/api/public/gallery");
       return await parse(res);
     } catch {
       return [];
@@ -479,7 +554,7 @@ export const api = {
   },
   async listPublicOffices(): Promise<PublicOffice[]> {
     try {
-      const res = await fetch("/api/public/offices");
+      const res = await apiFetch("/api/public/offices");
       return await parse(res);
     } catch {
       return siteConfig.offices.map((o, idx) => ({
@@ -498,7 +573,7 @@ export const api = {
   },
   async getPublicSettings(): Promise<SiteSettings> {
     try {
-      const res = await fetch("/api/public/settings");
+      const res = await apiFetch("/api/public/settings");
       return await parse(res);
     } catch {
       return {
@@ -519,7 +594,7 @@ export const api = {
     key: string,
     value: Record<string, unknown>,
   ): Promise<{ ok: boolean }> {
-    const res = await fetch("/api/admin/settings", {
+    const res = await apiFetch("/api/admin/settings", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ key, value }),
@@ -527,7 +602,7 @@ export const api = {
     return parse(res);
   },
 
-  // ── Enquiry (public) ───────────────────────────────────────────────────
+  // ── Enquiry (public) ────────────────────────────────────────────────────────
   async submitEnquiry(body: Record<string, unknown>): Promise<{
     ok: boolean;
     error?: string;
@@ -535,7 +610,7 @@ export const api = {
   }> {
     let res: Response;
     try {
-      res = await fetch("/api/enquiries", {
+      res = await apiFetch("/api/enquiries", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
@@ -554,7 +629,7 @@ export const api = {
     }>(res).catch(() => ({ ok: false }));
   },
 
-  // ── Admin: dashboard ───────────────────────────────────────────────────
+  // ── Admin: dashboard ────────────────────────────────────────────────────────
   async dashboard(): Promise<{
     enquiries: {
       total: number;
@@ -564,17 +639,17 @@ export const api = {
     };
     packages: { total: number; published: number; featured: number };
   }> {
-    const res = await fetch("/api/admin/dashboard");
+    const res = await apiFetch("/api/admin/dashboard");
     return parse(res);
   },
 
-  // ── Admin: packages ────────────────────────────────────────────────────
+  // ── Admin: packages ─────────────────────────────────────────────────────────
   async adminPackages(): Promise<{ items: unknown[] }> {
-    const res = await fetch("/api/admin/packages");
+    const res = await apiFetch("/api/admin/packages");
     return parse(res);
   },
   async adminPackage(id: string): Promise<unknown> {
-    const res = await fetch(`/api/admin/packages/${encodeURIComponent(id)}`);
+    const res = await apiFetch(`/api/admin/packages/${encodeURIComponent(id)}`);
     return parse(res);
   },
   async savePackage(
@@ -586,7 +661,7 @@ export const api = {
     fieldErrors?: Record<string, string>;
     slug?: string;
   }> {
-    const res = await fetch("/api/admin/packages", {
+    const res = await apiFetch("/api/admin/packages", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id, data }),
@@ -597,7 +672,7 @@ export const api = {
     id: string,
     active: boolean,
   ): Promise<{ ok: boolean }> {
-    const res = await fetch(
+    const res = await apiFetch(
       `/api/admin/packages/${encodeURIComponent(id)}/active`,
       {
         method: "POST",
@@ -611,7 +686,7 @@ export const api = {
     id: string,
     featured: boolean,
   ): Promise<{ ok: boolean }> {
-    const res = await fetch(
+    const res = await apiFetch(
       `/api/admin/packages/${encodeURIComponent(id)}/featured`,
       {
         method: "POST",
@@ -622,19 +697,19 @@ export const api = {
     return parse(res);
   },
   async deletePackage(id: string): Promise<{ ok: boolean }> {
-    const res = await fetch(`/api/admin/packages/${encodeURIComponent(id)}`, {
+    const res = await apiFetch(`/api/admin/packages/${encodeURIComponent(id)}`, {
       method: "DELETE",
     });
     return parse(res);
   },
 
-  // ── Admin: enquiries ───────────────────────────────────────────────────
+  // ── Admin: enquiries ────────────────────────────────────────────────────────
   async adminEnquiries(status?: string): Promise<{ items: unknown[] }> {
-    const res = await fetch(`/api/admin/enquiries${qs({ status })}`);
+    const res = await apiFetch(`/api/admin/enquiries${qs({ status })}`);
     return parse(res);
   },
   async setEnquiryStatus(id: string, status: string): Promise<{ ok: boolean }> {
-    const res = await fetch(
+    const res = await apiFetch(
       `/api/admin/enquiries/${encodeURIComponent(id)}/status`,
       {
         method: "POST",
@@ -645,16 +720,16 @@ export const api = {
     return parse(res);
   },
 
-  // ── Admin: generic content modules (keyed by DB table name) ───────────
+  // ── Admin: generic content modules (keyed by DB table name) ───────────────
   async listModule(module: string): Promise<{ items: unknown[] }> {
-    const res = await fetch(`/api/admin/${encodeURIComponent(module)}`);
+    const res = await apiFetch(`/api/admin/${encodeURIComponent(module)}`);
     return parse(res);
   },
   async saveModule(
     module: string,
     body: Record<string, unknown>,
   ): Promise<{ ok: boolean; error?: string }> {
-    const res = await fetch(`/api/admin/${encodeURIComponent(module)}/save`, {
+    const res = await apiFetch(`/api/admin/${encodeURIComponent(module)}/save`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
@@ -666,7 +741,7 @@ export const api = {
     id: string,
     active: boolean,
   ): Promise<{ ok: boolean }> {
-    const res = await fetch(`/api/admin/${encodeURIComponent(module)}/toggle`, {
+    const res = await apiFetch(`/api/admin/${encodeURIComponent(module)}/toggle`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id, active }),
@@ -674,7 +749,7 @@ export const api = {
     return parse(res);
   },
   async deleteModule(module: string, id: string): Promise<{ ok: boolean }> {
-    const res = await fetch(
+    const res = await apiFetch(
       `/api/admin/${encodeURIComponent(module)}/${encodeURIComponent(id)}`,
       {
         method: "DELETE",
@@ -683,11 +758,12 @@ export const api = {
     return parse(res);
   },
 
-  // ── Upload ─────────────────────────────────────────────────────────────
+  // ── Upload ──────────────────────────────────────────────────────────────────
   async upload(
     formData: FormData,
   ): Promise<{ ok: boolean; url?: string; error?: string }> {
-    const res = await fetch("/api/upload", { method: "POST", body: formData });
+    const res = await apiFetch("/api/upload", { method: "POST", body: formData });
     return parse(res);
   },
 };
+

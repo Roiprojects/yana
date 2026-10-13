@@ -1,4 +1,4 @@
-import { query } from "./db.js";
+import { queryStrict as query } from "./db.js";
 
 // ── Enquiries ────────────────────────────────────────────────────────────────
 export type EnquiryRow = {
@@ -272,12 +272,12 @@ export async function savePackage(
   } else {
     const rows = await query(
       `insert into tour_packages
-        (title, slug, scope, tour_type, category_name, destination_name, country,
+        (title, slug, scope, tour_type, category_name, theme_name, destination_name, country,
          duration_days, duration_nights, overview, highlights, inclusions, exclusions,
-         price_amount, taxes_info, hero_image_url, is_featured, is_active, status,
+         price_amount, taxes_info, hero_image_url, source_pdf, is_featured, is_active, status,
          itinerary, review_status, sort_order)
-       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12::jsonb,$13::jsonb,
-         $14,$15,$16,$17,$18,$19,$20::jsonb,'verified',
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13::jsonb,$14::jsonb,
+         $15,$16,$17,$18,$19,$20,$21,$22::jsonb,'verified',
          (select coalesce(max(sort_order),0)+10 from tour_packages))
        returning id`,
       params,

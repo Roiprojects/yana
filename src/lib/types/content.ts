@@ -39,8 +39,8 @@ export type AboutValue = {
 
 export type AboutContent = {
   headline?: string;
-  intro?: string[];
-  offerings?: string[];
+  intro?: string[] | string;
+  offerings?: string[] | string;
   values?: AboutValue[];
 };
 
