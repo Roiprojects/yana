@@ -17,9 +17,7 @@ import {
   Inbox,
   Quote,
   HelpCircle,
-  Search,
   Settings,
-  ShieldCheck,
   KeyRound,
   type LucideIcon,
 } from "lucide-react";
@@ -73,9 +71,7 @@ export const adminNav: AdminNavGroup[] = [
   {
     heading: "System",
     items: [
-      { label: "SEO", href: "/admin/seo", icon: Search },
       { label: "Website Settings", href: "/admin/settings", icon: Settings },
-      { label: "Administrators", href: "/admin/admins", icon: ShieldCheck },
       {
         label: "Change Password",
         href: "/admin/account/password",
