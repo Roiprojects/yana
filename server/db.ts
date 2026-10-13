@@ -37,22 +37,18 @@ function sslConfig(url = ""): PoolConfig["ssl"] {
     const m = /[?&]sslmode=([a-z-]+)/i.exec(url);
     if (m) mode = m[1].toLowerCase();
   }
-  const isLoopback =
-    url.includes("127.0.0.1") ||
-    url.includes("localhost") ||
-    (!url && (process.env.DB_HOST === "127.0.0.1" || process.env.DB_HOST === "localhost" || !process.env.DB_HOST));
 
-  if (!mode) {
-    mode = isLoopback ? "disable" : (process.env.NODE_ENV === "production" ? "prefer" : "disable");
+  // The database at 168.119.64.101 and cPanel local instances do NOT support SSL.
+  // Default to disabled unless explicitly enabled via environment variable.
+  if (!mode || mode === "disable" || mode === "false" || mode === "off" || mode === "prefer") {
+    return false;
   }
-  if (mode === "disable" || mode === "false" || mode === "off") return false;
-  if (mode === "require" || mode === "prefer" || mode === "no-verify") {
+  if (mode === "require" || mode === "no-verify") {
     return { rejectUnauthorized: false };
   }
   const ca = process.env.DB_SSL_CA?.replace(/\\n/g, "\n");
   return ca ? { rejectUnauthorized: true, ca } : { rejectUnauthorized: false };
 }
-
 
 function stripSslParams(url: string): string {
   return url
@@ -62,32 +58,48 @@ function stripSslParams(url: string): string {
 }
 
 function createPool(): Pool | null {
-  const connectionString =
+  const isVercel = Boolean(process.env.VERCEL || process.env.VERCEL_ENV);
+  const remoteDbIp = "168.119.64.101";
+
+  let connectionString =
     process.env.DATABASE_URL ||
     process.env.POSTGRES_URL ||
     process.env.POSTGRESQL_URL;
+
+  // On Vercel cloud serverless, 127.0.0.1 cannot reach the database.
+  // Automatically route to the remote PostgreSQL server at 168.119.64.101.
+  if (isVercel) {
+    if (!connectionString) {
+      connectionString = `postgres://yanat710:5UwsNVK0RI0DGVsC4BOmR9cLP@${remoteDbIp}:5432/yanat710`;
+    } else if (connectionString.includes("127.0.0.1") || connectionString.includes("localhost")) {
+      connectionString = connectionString.replace(/@(127\.0\.0\.1|localhost)(:\d+)?\//, `@${remoteDbIp}$2/`);
+    }
+  }
 
   let poolConfig: PoolConfig;
 
   if (connectionString) {
     let finalUrl = connectionString;
-    // When on the production host or if DB_HOST is set to localhost/127.0.0.1,
-    // automatically swap any remote IP with 127.0.0.1 or localhost
-    const hostOverride = process.env.DB_HOST_OVERRIDE || process.env.DB_HOST;
-    if (hostOverride === "localhost" || hostOverride === "127.0.0.1") {
-      finalUrl = finalUrl.replace(/@([^:/]+)(:\d+)?\//, `@${hostOverride}$2/`);
+    // On VPS hosting (non-Vercel), allow host override to localhost / 127.0.0.1
+    if (!isVercel) {
+      const hostOverride = process.env.DB_HOST_OVERRIDE || process.env.DB_HOST;
+      if (hostOverride === "localhost" || hostOverride === "127.0.0.1") {
+        finalUrl = finalUrl.replace(/@([^:/]+)(:\d+)?\//, `@${hostOverride}$2/`);
+      }
     }
 
     poolConfig = {
       connectionString: stripSslParams(finalUrl),
       ssl: sslConfig(finalUrl),
-      max: parseInt(process.env.DB_POOL_MAX || "20", 10),
+      max: parseInt(process.env.DB_POOL_MAX || "10", 10),
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 10000,
     };
   } else {
-    // Discrete parameters fallback with 127.0.0.1 as default host
-    const host = process.env.DB_HOST || process.env.PGHOST || "127.0.0.1";
+    // Discrete parameters fallback: on Vercel use remote IP, on VPS use 127.0.0.1
+    const host = isVercel
+      ? remoteDbIp
+      : (process.env.DB_HOST || process.env.PGHOST || "127.0.0.1");
     const database = process.env.DB_NAME || process.env.PGDATABASE || "yanat710";
     const user = process.env.DB_USER || process.env.PGUSER || "yanat710";
     const password =
@@ -103,7 +115,7 @@ function createPool(): Pool | null {
       user,
       password,
       ssl: sslConfig(),
-      max: parseInt(process.env.DB_POOL_MAX || "20", 10),
+      max: parseInt(process.env.DB_POOL_MAX || "10", 10),
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 10000,
     };

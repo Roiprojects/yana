@@ -219,12 +219,10 @@ function sslConfig(url = "") {
     const m = /[?&]sslmode=([a-z-]+)/i.exec(url);
     if (m) mode = m[1].toLowerCase();
   }
-  const isLoopback = url.includes("127.0.0.1") || url.includes("localhost") || !url && (process.env.DB_HOST === "127.0.0.1" || process.env.DB_HOST === "localhost" || !process.env.DB_HOST);
-  if (!mode) {
-    mode = isLoopback ? "disable" : process.env.NODE_ENV === "production" ? "prefer" : "disable";
+  if (!mode || mode === "disable" || mode === "false" || mode === "off" || mode === "prefer") {
+    return false;
   }
-  if (mode === "disable" || mode === "false" || mode === "off") return false;
-  if (mode === "require" || mode === "prefer" || mode === "no-verify") {
+  if (mode === "require" || mode === "no-verify") {
     return { rejectUnauthorized: false };
   }
   const ca = process.env.DB_SSL_CA?.replace(/\\n/g, "\n");
@@ -234,23 +232,34 @@ function stripSslParams(url) {
   return url.replace(/([?&])sslmode=[^&]*&?/i, "$1").replace(/([?&])ssl=[^&]*&?/i, "$1").replace(/[?&]$/, "");
 }
 function createPool() {
-  const connectionString = process.env.DATABASE_URL || process.env.POSTGRES_URL || process.env.POSTGRESQL_URL;
+  const isVercel = Boolean(process.env.VERCEL || process.env.VERCEL_ENV);
+  const remoteDbIp = "168.119.64.101";
+  let connectionString = process.env.DATABASE_URL || process.env.POSTGRES_URL || process.env.POSTGRESQL_URL;
+  if (isVercel) {
+    if (!connectionString) {
+      connectionString = `postgres://yanat710:5UwsNVK0RI0DGVsC4BOmR9cLP@${remoteDbIp}:5432/yanat710`;
+    } else if (connectionString.includes("127.0.0.1") || connectionString.includes("localhost")) {
+      connectionString = connectionString.replace(/@(127\.0\.0\.1|localhost)(:\d+)?\//, `@${remoteDbIp}$2/`);
+    }
+  }
   let poolConfig;
   if (connectionString) {
     let finalUrl = connectionString;
-    const hostOverride = process.env.DB_HOST_OVERRIDE || process.env.DB_HOST;
-    if (hostOverride === "localhost" || hostOverride === "127.0.0.1") {
-      finalUrl = finalUrl.replace(/@([^:/]+)(:\d+)?\//, `@${hostOverride}$2/`);
+    if (!isVercel) {
+      const hostOverride = process.env.DB_HOST_OVERRIDE || process.env.DB_HOST;
+      if (hostOverride === "localhost" || hostOverride === "127.0.0.1") {
+        finalUrl = finalUrl.replace(/@([^:/]+)(:\d+)?\//, `@${hostOverride}$2/`);
+      }
     }
     poolConfig = {
       connectionString: stripSslParams(finalUrl),
       ssl: sslConfig(finalUrl),
-      max: parseInt(process.env.DB_POOL_MAX || "20", 10),
+      max: parseInt(process.env.DB_POOL_MAX || "10", 10),
       idleTimeoutMillis: 3e4,
       connectionTimeoutMillis: 1e4
     };
   } else {
-    const host = process.env.DB_HOST || process.env.PGHOST || "127.0.0.1";
+    const host = isVercel ? remoteDbIp : process.env.DB_HOST || process.env.PGHOST || "127.0.0.1";
     const database = process.env.DB_NAME || process.env.PGDATABASE || "yanat710";
     const user = process.env.DB_USER || process.env.PGUSER || "yanat710";
     const password = process.env.DB_PASSWORD || process.env.PGPASSWORD || "5UwsNVK0RI0DGVsC4BOmR9cLP";
@@ -262,7 +271,7 @@ function createPool() {
       user,
       password,
       ssl: sslConfig(),
-      max: parseInt(process.env.DB_POOL_MAX || "20", 10),
+      max: parseInt(process.env.DB_POOL_MAX || "10", 10),
       idleTimeoutMillis: 3e4,
       connectionTimeoutMillis: 1e4
     };
