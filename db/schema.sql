@@ -106,6 +106,14 @@ create table if not exists hero_slides (
   created_at        timestamptz not null default now()
 );
 
+alter table hero_slides add column if not exists video_url text;
+alter table hero_slides add column if not exists mobile_video_url text;
+alter table hero_slides add column if not exists cta_primary_text text default 'Explore packages';
+alter table hero_slides add column if not exists cta_primary_link text default '/packages';
+alter table hero_slides add column if not exists cta_secondary_text text default 'Plan a custom trip';
+alter table hero_slides add column if not exists sort_order int not null default 0;
+alter table hero_slides add column if not exists is_active boolean not null default true;
+
 -- Destinations
 create table if not exists destinations (
   id          uuid primary key default gen_random_uuid(),
