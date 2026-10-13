@@ -42,7 +42,7 @@ export function SiteFooter() {
     };
   }, []);
 
-  const fallbackOffices = siteConfig.offices.map((office, index) => ({
+  const fallbackOffices: PublicOffice[] = siteConfig.offices.map((office, index) => ({
     id: `fallback-${index}`,
     office_name: office.name,
     address: office.address,
@@ -51,27 +51,9 @@ export function SiteFooter() {
     phone: null,
     email: null,
     hours: "Mon – Sat: 9:30 AM – 6:30 PM",
-    is_active: true,
-    sort_order: index,
   }));
 
-  const officeMap = new Map<string, { office_name: string; address: string }>();
-
-  for (const office of fallbackOffices) {
-    officeMap.set(office.office_name.toLowerCase(), {
-      office_name: office.office_name,
-      address: office.address || "",
-    });
-  }
-
-  for (const office of offices) {
-    officeMap.set(office.office_name.toLowerCase(), {
-      office_name: office.office_name,
-      address: office.address || "",
-    });
-  }
-
-  const officeList = Array.from(officeMap.values());
+  const officeList: PublicOffice[] = offices.length > 0 ? offices : fallbackOffices;
 
   return (
     <footer className="relative overflow-hidden bg-slate-950 text-white">
@@ -354,7 +336,7 @@ export function SiteFooter() {
           <div className="mt-5 space-y-3.5 text-xs text-white/75">
             {officeList.map((office) => (
               <div
-                key={office.office_name}
+                key={office.id || office.office_name}
                 className="group rounded-xl border border-white/10 bg-white/5 p-3.5 transition-all duration-300 hover:border-white/25 hover:bg-white/10"
               >
                 <div className="flex items-center justify-between">
@@ -363,7 +345,7 @@ export function SiteFooter() {
                   </span>
                   <a
                     href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-                      `${office.office_name} ${office.address}`,
+                      `${office.office_name} ${office.address || ""}`,
                     )}`}
                     target="_blank"
                     rel="noopener noreferrer"
@@ -376,6 +358,17 @@ export function SiteFooter() {
                 <p className="mt-1.5 leading-relaxed text-white/65">
                   {office.address}
                 </p>
+                {office.phone && (
+                  <div className="mt-2 flex items-center gap-1.5 text-[11px] text-[#e8c979] font-semibold">
+                    <Phone className="h-3 w-3" />
+                    <a
+                      href={`tel:${office.phone.replace(/\s/g, "")}`}
+                      className="hover:underline"
+                    >
+                      {office.phone}
+                    </a>
+                  </div>
+                )}
               </div>
             ))}
           </div>

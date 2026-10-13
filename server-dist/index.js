@@ -810,6 +810,7 @@ async function listPublicOffices() {
   const rows = await queryStrict(
     `select id, office_name, address, city, pincode, phone, email, hours, is_active, sort_order
        from contact_info
+      where is_active = true
       order by sort_order asc`
   );
   return rows ?? [];
@@ -956,15 +957,16 @@ async function saveOfficeAction(body) {
   const pincode = str(body.pincode);
   const phone = str(body.phone);
   const email = str(body.email);
+  const hours = str(body.hours) || "Mon \u2013 Sat: 9:30 AM \u2013 6:30 PM";
   if (id) {
     await queryStrict(
-      `update contact_info set office_name=$1, address=$2, city=$3, pincode=$4, phone=$5, email=$6 where id=$7`,
-      [office_name, address, city, pincode, phone, email, id]
+      `update contact_info set office_name=$1, address=$2, city=$3, pincode=$4, phone=$5, email=$6, hours=$7 where id=$8`,
+      [office_name, address, city, pincode, phone, email, hours, id]
     );
   } else {
     await queryStrict(
-      `insert into contact_info (office_name, address, city, pincode, phone, email) values ($1, $2, $3, $4, $5, $6)`,
-      [office_name, address, city, pincode, phone, email]
+      `insert into contact_info (office_name, address, city, pincode, phone, email, hours) values ($1, $2, $3, $4, $5, $6, $7)`,
+      [office_name, address, city, pincode, phone, email, hours]
     );
   }
   return { ok: true };

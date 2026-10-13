@@ -35,6 +35,12 @@ const fields: FieldDef[] = [
     type: "text",
     placeholder: "info@yanaindia.com",
   },
+  {
+    name: "hours",
+    label: "Operating Hours",
+    type: "text",
+    placeholder: "Mon – Sat: 9:30 AM – 6:30 PM",
+  },
 ];
 
 export function ContactClient() {

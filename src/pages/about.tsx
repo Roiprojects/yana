@@ -197,20 +197,24 @@ export function AboutPage() {
 
   const officeList =
     offices.length > 0
-      ? defaultOffices.map((d) => {
-          const matched = offices.find(
-            (o) => o.office_name.toLowerCase() === d.name.toLowerCase(),
+      ? offices.map((o) => {
+          const matched = defaultOffices.find(
+            (d) =>
+              d.name.toLowerCase() === o.office_name.toLowerCase() ||
+              o.office_name.toLowerCase().includes(d.name.toLowerCase()) ||
+              (o.city && d.name.toLowerCase().includes(o.city.toLowerCase())),
           );
-          if (matched) {
-            return {
-              ...d,
-              name: matched.office_name,
-              address: officeAddress(matched) || d.address,
-              phone: matched.phone || d.phone,
-              hours: matched.hours || d.hours,
-            };
-          }
-          return d;
+          const fullAddr = [o.address, o.city, o.pincode].filter(Boolean).join(", ");
+          return {
+            name: o.office_name,
+            tag: matched?.tag || "Branch Office",
+            tagColor: matched?.tagColor || "text-primary bg-primary/10 border-primary/25",
+            address: o.address || fullAddr || matched?.address || "",
+            phone: o.phone || matched?.phone || "+91 9513588143",
+            hours: o.hours || matched?.hours || "Mon – Sat: 9:30 AM – 6:30 PM",
+            mapQuery: `${o.office_name} ${o.address || fullAddr}`,
+            image: matched?.image || "/brand/office-udupi.jpg",
+          };
         })
       : defaultOffices;
 

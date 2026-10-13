@@ -36,8 +36,17 @@ export function ContactPage() {
 
   const list =
     offices.length > 0
-      ? offices.map((o) => ({ name: o.office_name, address: officeAddress(o) }))
-      : fallbackOffices;
+      ? offices.map((o) => ({
+          name: o.office_name,
+          address: o.address || officeAddress(o),
+          phone: o.phone,
+          email: o.email,
+        }))
+      : fallbackOffices.map((o) => ({
+          ...o,
+          phone: null as string | null,
+          email: null as string | null,
+        }));
 
   return (
     <>
@@ -92,12 +101,28 @@ export function ContactPage() {
                   key={office.name}
                   className="flex items-start gap-3 rounded-[1.3rem] border border-white/80 bg-white/80 p-4 shadow-sm"
                 >
-                  <MapPin className="mt-1 h-5 w-5 text-primary" aria-hidden />
-                  <div>
+                  <MapPin className="mt-1 h-5 w-5 text-primary shrink-0" aria-hidden />
+                  <div className="space-y-1">
                     <p className="font-semibold text-deep">{office.name}</p>
                     <p className="text-sm leading-6 text-text-secondary">
                       {office.address}
                     </p>
+                    {office.phone && (
+                      <p className="text-xs font-semibold text-primary flex items-center gap-1.5 pt-0.5">
+                        <Phone className="h-3.5 w-3.5" />
+                        <a href={`tel:${office.phone.replace(/\s/g, "")}`} className="hover:underline">
+                          {office.phone}
+                        </a>
+                      </p>
+                    )}
+                    {office.email && (
+                      <p className="text-xs text-text-secondary flex items-center gap-1.5">
+                        <Mail className="h-3.5 w-3.5" />
+                        <a href={`mailto:${office.email}`} className="hover:underline">
+                          {office.email}
+                        </a>
+                      </p>
+                    )}
                   </div>
                 </div>
               ))}
