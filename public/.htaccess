@@ -1,20 +1,18 @@
-# Yana Travels - Apache / cPanel config (copied into dist/ on build)
-Options -MultiViews
-RewriteEngine On
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
 
-# Force HTTPS
-RewriteCond %{HTTPS} off
-RewriteCond %{HTTP:X-Forwarded-Proto} !https
-RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+  # 1. Forward /api calls to the Express Node.js backend running on 127.0.0.1:4000
+  <IfModule mod_proxy.c>
+    RewriteRule ^api/(.*)$ http://127.0.0.1:4000/api/$1 [P,L]
+  </IfModule>
 
-# OPTIONAL: if the Node API runs on this server (e.g. port 4000), uncomment
-# the next line to forward /api/* to it (needs mod_proxy enabled).
-# RewriteRule ^api/(.*)$ http://127.0.0.1:4000/api/$1 [P,L]
+  # 2. Do not rewrite real files or directories
+  RewriteRule ^index\.html$ - [L]
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
 
-# Serve real files/folders directly
-RewriteCond %{REQUEST_FILENAME} -f [OR]
-RewriteCond %{REQUEST_FILENAME} -d
-RewriteRule ^ - [L]
-
-# Single-page app: everything else (e.g. /admin/login) -> index.html
-RewriteRule ^ index.html [L]
+  # 3. For any other route (except /api), route to index.html for React SPA
+  RewriteCond %{REQUEST_URI} !^/api
+  RewriteRule . /index.html [L]
+</IfModule>
