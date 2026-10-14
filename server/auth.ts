@@ -35,10 +35,12 @@ function hmac(data: string): string {
   return crypto.createHmac("sha256", secret).update(data).digest("base64url");
 }
 
-/** Constant-time string comparison. */
+/** Constant-time string comparison that never throws on length mismatch. */
 function safeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  return crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b));
+  const bufA = Buffer.from(a);
+  const bufB = Buffer.from(b);
+  if (bufA.length !== bufB.length) return false;
+  return crypto.timingSafeEqual(bufA, bufB);
 }
 
 /** Verify email/password against env credentials or default admin. */
@@ -46,10 +48,14 @@ export function verifyCredentials(email: string, password: string): boolean {
   const e = authEnv("ADMIN_EMAIL", "admin@yanatravels.com");
   const p = authEnv("ADMIN_PASSWORD", "admin123");
   if (!email || !password) return false;
-  return (
-    safeEqual(email.trim().toLowerCase(), e.trim().toLowerCase()) &&
-    safeEqual(password, p)
-  );
+  try {
+    return (
+      safeEqual(email.trim().toLowerCase(), e.trim().toLowerCase()) &&
+      safeEqual(password, p)
+    );
+  } catch {
+    return false;
+  }
 }
 
 /** Create a signed session token: `<payloadB64>.<sig>`. */

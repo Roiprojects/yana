@@ -66,24 +66,20 @@ function createPool(): Pool | null {
     process.env.POSTGRES_URL ||
     process.env.POSTGRESQL_URL;
 
-  // On Vercel cloud serverless, 127.0.0.1 cannot reach the database.
-  // Automatically route to the remote PostgreSQL server at 168.119.64.101.
-  if (isVercel) {
-    if (!connectionString) {
-      connectionString = `postgres://yanat710:5UwsNVK0RI0DGVsC4BOmR9cLP@${remoteDbIp}:5432/yanat710`;
-    } else if (connectionString.includes("127.0.0.1") || connectionString.includes("localhost")) {
-      connectionString = connectionString.replace(/@(127\.0\.0\.1|localhost)(:\d+)?\//, `@${remoteDbIp}$2/`);
-    }
+  if (!connectionString) {
+    connectionString = `postgres://yanat710:5UwsNVK0RI0DGVsC4BOmR9cLP@${remoteDbIp}:5432/yanat710`;
+  } else if (isVercel && (connectionString.includes("127.0.0.1") || connectionString.includes("localhost"))) {
+    connectionString = connectionString.replace(/@(127\.0\.0\.1|localhost)(:\d+)?\//, `@${remoteDbIp}$2/`);
   }
 
   let poolConfig: PoolConfig;
 
   if (connectionString) {
     let finalUrl = connectionString;
-    // On VPS hosting (non-Vercel), allow host override to localhost / 127.0.0.1
+    // On VPS hosting (non-Vercel), allow host override to localhost / 127.0.0.1 if explicitly requested
     if (!isVercel) {
-      const hostOverride = process.env.DB_HOST_OVERRIDE || process.env.DB_HOST;
-      if (hostOverride === "localhost" || hostOverride === "127.0.0.1") {
+      const hostOverride = process.env.DB_HOST_OVERRIDE;
+      if (hostOverride) {
         finalUrl = finalUrl.replace(/@([^:/]+)(:\d+)?\//, `@${hostOverride}$2/`);
       }
     }
@@ -96,10 +92,7 @@ function createPool(): Pool | null {
       connectionTimeoutMillis: 10000,
     };
   } else {
-    // Discrete parameters fallback: on Vercel use remote IP, on VPS use 127.0.0.1
-    const host = isVercel
-      ? remoteDbIp
-      : (process.env.DB_HOST || process.env.PGHOST || "127.0.0.1");
+    const host = process.env.DB_HOST || process.env.PGHOST || remoteDbIp;
     const database = process.env.DB_NAME || process.env.PGDATABASE || "yanat710";
     const user = process.env.DB_USER || process.env.PGUSER || "yanat710";
     const password =

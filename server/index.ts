@@ -149,13 +149,18 @@ const wrap =
   (req: Request, res: Response) => {
     fn(req, res).catch((err) => {
       const e = err as Error;
-      const dbDown = e instanceof DatabaseUnavailableError;
+      const isDbError =
+        e instanceof DatabaseUnavailableError ||
+        e?.message?.toLowerCase().includes("database") ||
+        e?.message?.toLowerCase().includes("connect") ||
+        e?.message?.toLowerCase().includes("timeout") ||
+        (e as any)?.code === "ECONNREFUSED";
       const cfg = e instanceof AuthConfigError;
       log.error("api.error", {
         requestId: res.locals.requestId,
         method: req.method,
         path: req.path,
-        category: dbDown ? "database_unavailable" : cfg ? "config" : "unexpected",
+        category: isDbError ? "database_unavailable" : cfg ? "config" : "unexpected",
         message: e?.message,
         stack: e?.stack,
       });
@@ -164,7 +169,7 @@ const wrap =
         res.status(503).json({ ok: false, error: "Server is not fully configured. Contact the site administrator.", requestId: res.locals.requestId });
         return;
       }
-      if (dbDown) {
+      if (isDbError) {
         res.status(503).json({
           ok: false,
           error: "Database is temporarily unavailable. Please try again shortly.",
@@ -172,7 +177,7 @@ const wrap =
         });
         return;
       }
-      res.status(500).json({ ok: false, error: "Internal server error.", requestId: res.locals.requestId });
+      res.status(500).json({ ok: false, error: e?.message || "Internal server error.", requestId: res.locals.requestId });
     });
   };
 

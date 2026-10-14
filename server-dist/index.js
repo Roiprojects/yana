@@ -64,14 +64,20 @@ function hmac(data) {
   return crypto.createHmac("sha256", secret).update(data).digest("base64url");
 }
 function safeEqual(a, b) {
-  if (a.length !== b.length) return false;
-  return crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b));
+  const bufA = Buffer.from(a);
+  const bufB = Buffer.from(b);
+  if (bufA.length !== bufB.length) return false;
+  return crypto.timingSafeEqual(bufA, bufB);
 }
 function verifyCredentials(email, password) {
   const e = authEnv("ADMIN_EMAIL", "admin@yanatravels.com");
   const p = authEnv("ADMIN_PASSWORD", "admin123");
   if (!email || !password) return false;
-  return safeEqual(email.trim().toLowerCase(), e.trim().toLowerCase()) && safeEqual(password, p);
+  try {
+    return safeEqual(email.trim().toLowerCase(), e.trim().toLowerCase()) && safeEqual(password, p);
+  } catch {
+    return false;
+  }
 }
 async function createSessionToken(email) {
   const payload = Buffer.from(
@@ -204,19 +210,17 @@ function createPool() {
   const isVercel = Boolean(process.env.VERCEL || process.env.VERCEL_ENV);
   const remoteDbIp = "168.119.64.101";
   let connectionString = process.env.DATABASE_URL || process.env.POSTGRES_URL || process.env.POSTGRESQL_URL;
-  if (isVercel) {
-    if (!connectionString) {
-      connectionString = `postgres://yanat710:5UwsNVK0RI0DGVsC4BOmR9cLP@${remoteDbIp}:5432/yanat710`;
-    } else if (connectionString.includes("127.0.0.1") || connectionString.includes("localhost")) {
-      connectionString = connectionString.replace(/@(127\.0\.0\.1|localhost)(:\d+)?\//, `@${remoteDbIp}$2/`);
-    }
+  if (!connectionString) {
+    connectionString = `postgres://yanat710:5UwsNVK0RI0DGVsC4BOmR9cLP@${remoteDbIp}:5432/yanat710`;
+  } else if (isVercel && (connectionString.includes("127.0.0.1") || connectionString.includes("localhost"))) {
+    connectionString = connectionString.replace(/@(127\.0\.0\.1|localhost)(:\d+)?\//, `@${remoteDbIp}$2/`);
   }
   let poolConfig;
   if (connectionString) {
     let finalUrl = connectionString;
     if (!isVercel) {
-      const hostOverride = process.env.DB_HOST_OVERRIDE || process.env.DB_HOST;
-      if (hostOverride === "localhost" || hostOverride === "127.0.0.1") {
+      const hostOverride = process.env.DB_HOST_OVERRIDE;
+      if (hostOverride) {
         finalUrl = finalUrl.replace(/@([^:/]+)(:\d+)?\//, `@${hostOverride}$2/`);
       }
     }
@@ -228,7 +232,7 @@ function createPool() {
       connectionTimeoutMillis: 1e4
     };
   } else {
-    const host = isVercel ? remoteDbIp : process.env.DB_HOST || process.env.PGHOST || "127.0.0.1";
+    const host = process.env.DB_HOST || process.env.PGHOST || remoteDbIp;
     const database = process.env.DB_NAME || process.env.PGDATABASE || "yanat710";
     const user = process.env.DB_USER || process.env.PGUSER || "yanat710";
     const password = process.env.DB_PASSWORD || process.env.PGPASSWORD || "5UwsNVK0RI0DGVsC4BOmR9cLP";
@@ -1117,13 +1121,13 @@ if (existsSync2(path2.join(distDir, "index.html"))) {
 var wrap = (fn) => (req, res) => {
   fn(req, res).catch((err) => {
     const e = err;
-    const dbDown = e instanceof DatabaseUnavailableError;
+    const isDbError = e instanceof DatabaseUnavailableError || e?.message?.toLowerCase().includes("database") || e?.message?.toLowerCase().includes("connect") || e?.message?.toLowerCase().includes("timeout") || e?.code === "ECONNREFUSED";
     const cfg = e instanceof AuthConfigError;
     log.error("api.error", {
       requestId: res.locals.requestId,
       method: req.method,
       path: req.path,
-      category: dbDown ? "database_unavailable" : cfg ? "config" : "unexpected",
+      category: isDbError ? "database_unavailable" : cfg ? "config" : "unexpected",
       message: e?.message,
       stack: e?.stack
     });
@@ -1132,7 +1136,7 @@ var wrap = (fn) => (req, res) => {
       res.status(503).json({ ok: false, error: "Server is not fully configured. Contact the site administrator.", requestId: res.locals.requestId });
       return;
     }
-    if (dbDown) {
+    if (isDbError) {
       res.status(503).json({
         ok: false,
         error: "Database is temporarily unavailable. Please try again shortly.",
@@ -1140,7 +1144,7 @@ var wrap = (fn) => (req, res) => {
       });
       return;
     }
-    res.status(500).json({ ok: false, error: "Internal server error.", requestId: res.locals.requestId });
+    res.status(500).json({ ok: false, error: e?.message || "Internal server error.", requestId: res.locals.requestId });
   });
 };
 app.get("/api/health", (_req, res) => {
