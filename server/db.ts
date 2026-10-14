@@ -57,61 +57,45 @@ function stripSslParams(url: string): string {
     .replace(/[?&]$/, "");
 }
 
-function createPool(): Pool | null {
-  const isVercel = Boolean(process.env.VERCEL || process.env.VERCEL_ENV);
-  const remoteDbIp = "168.119.64.101";
+function maskConnectionString(url: string): string {
+  try {
+    return url.replace(/:\/\/([^:]+):([^@]+)@/, "://$1:***@");
+  } catch {
+    return "[masked]";
+  }
+}
 
-  let connectionString =
+function createPool(): Pool | null {
+  const connectionString =
     process.env.DATABASE_URL ||
     process.env.POSTGRES_URL ||
     process.env.POSTGRESQL_URL;
 
-  if (!connectionString) {
-    connectionString = `postgres://yanat710:5UwsNVK0RI0DGVsC4BOmR9cLP@${remoteDbIp}:5432/yanat710`;
-  } else if (isVercel && (connectionString.includes("127.0.0.1") || connectionString.includes("localhost"))) {
-    connectionString = connectionString.replace(/@(127\.0\.0\.1|localhost)(:\d+)?\//, `@${remoteDbIp}$2/`);
-  }
-
   let poolConfig: PoolConfig;
 
   if (connectionString) {
-    let finalUrl = connectionString;
-    // On VPS hosting (non-Vercel), allow host override to localhost / 127.0.0.1 if explicitly requested
-    if (!isVercel) {
-      const hostOverride = process.env.DB_HOST_OVERRIDE;
-      if (hostOverride) {
-        finalUrl = finalUrl.replace(/@([^:/]+)(:\d+)?\//, `@${hostOverride}$2/`);
-      }
-    }
-
     poolConfig = {
-      connectionString: stripSslParams(finalUrl),
-      ssl: sslConfig(finalUrl),
+      connectionString: stripSslParams(connectionString),
+      ssl: sslConfig(connectionString),
       max: parseInt(process.env.DB_POOL_MAX || "10", 10),
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 10000,
     };
-  } else {
-    const host = process.env.DB_HOST || process.env.PGHOST || remoteDbIp;
-    const database = process.env.DB_NAME || process.env.PGDATABASE || "yanat710";
-    const user = process.env.DB_USER || process.env.PGUSER || "yanat710";
-    const password =
-      process.env.DB_PASSWORD ||
-      process.env.PGPASSWORD ||
-      "5UwsNVK0RI0DGVsC4BOmR9cLP";
-    const port = parseInt(process.env.DB_PORT || process.env.PGPORT || "5432", 10);
-
+  } else if (process.env.DB_HOST && process.env.DB_NAME && process.env.DB_USER && process.env.DB_PASSWORD) {
     poolConfig = {
-      host,
-      port,
-      database,
-      user,
-      password,
+      host: process.env.DB_HOST,
+      port: parseInt(process.env.DB_PORT || "5432", 10),
+      database: process.env.DB_NAME,
+      user: process.env.DB_USER,
+      password: process.env.DB_PASSWORD,
       ssl: sslConfig(),
       max: parseInt(process.env.DB_POOL_MAX || "10", 10),
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 10000,
     };
+  } else {
+    // No database credentials configured in environment
+    return null;
   }
 
   const p = new Pool(poolConfig);
@@ -131,11 +115,11 @@ if (process.env.NODE_ENV !== "production" && pool) {
 
 export function hasDb(): boolean {
   return Boolean(
+    pool ||
     process.env.DATABASE_URL ||
     process.env.POSTGRES_URL ||
     process.env.POSTGRESQL_URL ||
-    (process.env.DB_NAME && process.env.DB_USER) ||
-    pool
+    (process.env.DB_HOST && process.env.DB_NAME && process.env.DB_USER && process.env.DB_PASSWORD)
   );
 }
 
@@ -178,7 +162,7 @@ export async function testDatabaseConnection(): Promise<{
   latencyMs?: number;
   error?: string;
 }> {
-  if (!pool) return { success: false, error: "not_configured" };
+  if (!pool) return { success: false, error: "Database connection is not configured (DATABASE_URL missing)" };
   const start = Date.now();
   try {
     const client = await pool.connect();

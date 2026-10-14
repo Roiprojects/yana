@@ -20,38 +20,43 @@ export class AuthConfigError extends Error {
   }
 }
 
-/** Read an auth env var with safe fallback defaults so authentication never crashes. */
-function authEnv(name: string, fallbackDefault: string): string {
-  const v = clean(process.env[name]);
-  if (v) return v;
-  return fallbackDefault;
+/** Read an auth env var; requires configuration in production. */
+function getAuthSecret(): string {
+  const secret = clean(process.env.AUTH_SECRET);
+  if (secret) return secret;
+  if (IS_PROD()) {
+    throw new AuthConfigError("AUTH_SECRET environment variable is required in production");
+  }
+  return "dev_fallback_secret_key_minimum_32_characters_yana_travels";
 }
 
 function hmac(data: string): string {
-  const secret = authEnv(
-    "AUTH_SECRET",
-    "yana_admin_production_auth_secret_stable_key_2026_yana_travels_min_32_chars",
-  );
+  const secret = getAuthSecret();
   return crypto.createHmac("sha256", secret).update(data).digest("base64url");
 }
 
 /** Constant-time string comparison that never throws on length mismatch. */
 function safeEqual(a: string, b: string): boolean {
-  const bufA = Buffer.from(a);
-  const bufB = Buffer.from(b);
+  const bufA = Buffer.from(a, "utf8");
+  const bufB = Buffer.from(b, "utf8");
   if (bufA.length !== bufB.length) return false;
   return crypto.timingSafeEqual(bufA, bufB);
 }
 
-/** Verify email/password against env credentials or default admin. */
+/** Verify email/password against env credentials. */
 export function verifyCredentials(email: string, password: string): boolean {
-  const e = authEnv("ADMIN_EMAIL", "admin@yanatravels.com");
-  const p = authEnv("ADMIN_PASSWORD", "admin123");
   if (!email || !password) return false;
+  const configuredEmail = clean(process.env.ADMIN_EMAIL) || (IS_PROD() ? "" : "admin@yanatravels.com");
+  const configuredPassword = clean(process.env.ADMIN_PASSWORD) || (IS_PROD() ? "" : "admin123");
+
+  if (!configuredEmail || !configuredPassword) {
+    throw new AuthConfigError("ADMIN_EMAIL and ADMIN_PASSWORD must be configured in environment");
+  }
+
   try {
     return (
-      safeEqual(email.trim().toLowerCase(), e.trim().toLowerCase()) &&
-      safeEqual(password, p)
+      safeEqual(email.trim().toLowerCase(), configuredEmail.trim().toLowerCase()) &&
+      safeEqual(password, configuredPassword)
     );
   } catch {
     return false;

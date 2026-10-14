@@ -51,13 +51,14 @@ const app = express();
 const IS_PROD = process.env.NODE_ENV === "production";
 
 // ── Startup configuration validation (names only, never values) ─────────────
-const hasDbConfig = Boolean(
-  process.env.DATABASE_URL ||
-  (process.env.DB_NAME && process.env.DB_USER) ||
-  hasDb()
-);
 const missingEnv: string[] = [];
-if (!hasDbConfig) missingEnv.push("DATABASE_URL");
+if (!process.env.DATABASE_URL && !(process.env.DB_HOST && process.env.DB_USER && process.env.DB_NAME)) {
+  missingEnv.push("DATABASE_URL");
+}
+if (!process.env.ADMIN_EMAIL) missingEnv.push("ADMIN_EMAIL");
+if (!process.env.ADMIN_PASSWORD) missingEnv.push("ADMIN_PASSWORD");
+if (!process.env.AUTH_SECRET) missingEnv.push("AUTH_SECRET");
+
 if (missingEnv.length) {
   log[IS_PROD ? "error" : "warn"]("config.missing_env", { category: "config", missing: missingEnv });
 }
@@ -115,24 +116,27 @@ app.use(
 );
 app.use(express.json({ limit: "2mb" }));
 
-// In serverless environments (e.g. Vercel / proxy rewrites), the route might arrive without the /api prefix.
-app.use((req, _res, next) => {
-  if (
-    !req.url.startsWith("/api/") &&
-    (req.url.startsWith("/auth/") ||
-      req.url.startsWith("/packages") ||
-      req.url.startsWith("/admin/") ||
-      req.url.startsWith("/enquiries") ||
-      req.url.startsWith("/site-settings") ||
-      req.url.startsWith("/testimonials") ||
-      req.url.startsWith("/destinations") ||
-      req.url.startsWith("/health") ||
-      req.url.startsWith("/upload"))
-  ) {
-    req.url = `/api${req.url}`;
-  }
-  next();
-});
+// In serverless environments (Vercel), rewrites might strip the /api prefix.
+// On standalone VPS servers, never rewrite frontend browser routes like /admin/login or /packages.
+if (process.env.VERCEL) {
+  app.use((req, _res, next) => {
+    if (
+      !req.url.startsWith("/api/") &&
+      (req.url.startsWith("/auth/") ||
+        req.url.startsWith("/packages") ||
+        req.url.startsWith("/admin/") ||
+        req.url.startsWith("/enquiries") ||
+        req.url.startsWith("/site-settings") ||
+        req.url.startsWith("/testimonials") ||
+        req.url.startsWith("/destinations") ||
+        req.url.startsWith("/health") ||
+        req.url.startsWith("/upload"))
+    ) {
+      req.url = `/api${req.url}`;
+    }
+    next();
+  });
+}
 
 // Serve uploaded files and public assets.
 const publicDir = path.resolve(__dirname, "..", "public");
@@ -151,24 +155,32 @@ const wrap =
       const e = err as Error;
       const isDbError =
         e instanceof DatabaseUnavailableError ||
-        e?.message?.toLowerCase().includes("database") ||
-        e?.message?.toLowerCase().includes("connect") ||
-        e?.message?.toLowerCase().includes("timeout") ||
-        (e as any)?.code === "ECONNREFUSED";
+        e?.name === "DatabaseUnavailableError" ||
+        /database|connect|timeout|econnrefused|enotfound|password authentication/i.test(e?.message || "") ||
+        (e as any)?.code === "ECONNREFUSED" ||
+        (e as any)?.code === "ETIMEDOUT";
       const cfg = e instanceof AuthConfigError;
+
       log.error("api.error", {
         requestId: res.locals.requestId,
         method: req.method,
         path: req.path,
         category: isDbError ? "database_unavailable" : cfg ? "config" : "unexpected",
         message: e?.message,
-        stack: e?.stack,
+        stack: IS_PROD ? undefined : e?.stack,
       });
+
       if (res.headersSent) return;
+
       if (cfg) {
-        res.status(503).json({ ok: false, error: "Server is not fully configured. Contact the site administrator.", requestId: res.locals.requestId });
+        res.status(503).json({
+          ok: false,
+          error: "Server configuration is incomplete. Contact the site administrator.",
+          requestId: res.locals.requestId,
+        });
         return;
       }
+
       if (isDbError) {
         res.status(503).json({
           ok: false,
@@ -177,7 +189,12 @@ const wrap =
         });
         return;
       }
-      res.status(500).json({ ok: false, error: e?.message || "Internal server error.", requestId: res.locals.requestId });
+
+      res.status(500).json({
+        ok: false,
+        error: IS_PROD ? "An unexpected server error occurred." : (e?.message || "Internal server error."),
+        requestId: res.locals.requestId,
+      });
     });
   };
 
@@ -216,11 +233,51 @@ app.post(
       res.status(400).json({ ok: false, error: "Email and password are required." });
       return;
     }
-    if (!verifyCredentials(email, password)) {
+
+    // Step 2 & 3: If database is configured, verify connectivity so DB failure is caught separately from bad password
+    if (hasDb()) {
+      const dbCheck = await pingDb();
+      if (!dbCheck.ok) {
+        log.error("auth.db_unreachable", {
+          requestId: res.locals.requestId,
+          category: "auth",
+          error: dbCheck.error,
+        });
+        res.status(503).json({
+          ok: false,
+          error: "Database is temporarily unavailable. Please try again shortly.",
+          requestId: res.locals.requestId,
+        });
+        return;
+      }
+    }
+
+    let isValid = false;
+    try {
+      isValid = verifyCredentials(email, password);
+    } catch (err) {
+      if (err instanceof AuthConfigError) {
+        log.error("auth.config_missing", {
+          requestId: res.locals.requestId,
+          category: "auth",
+          message: err.message,
+        });
+        res.status(503).json({
+          ok: false,
+          error: "Authentication service is not properly configured. Contact the site administrator.",
+          requestId: res.locals.requestId,
+        });
+        return;
+      }
+      throw err;
+    }
+
+    if (!isValid) {
       log.warn("auth.login_failed", { requestId: res.locals.requestId, category: "auth", ip: req.ip });
       res.status(401).json({ ok: false, error: "Invalid email or password." });
       return;
     }
+
     log.info("auth.login_success", { requestId: res.locals.requestId, category: "auth" });
     const token = await createSessionToken(email.toLowerCase());
     setSessionCookie(req, res, token);

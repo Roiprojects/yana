@@ -44,6 +44,7 @@ var enquiryFormSchema = baseEnquirySchema.extend({
 import crypto from "node:crypto";
 var SESSION_COOKIE = "yana_admin";
 var MAX_AGE_SECONDS = 60 * 60 * 8;
+var IS_PROD = () => process.env.NODE_ENV === "production";
 var clean = (v) => (v ?? "").trim().replace(/^["']|["']$/g, "");
 var AuthConfigError = class extends Error {
   constructor(missing) {
@@ -51,30 +52,33 @@ var AuthConfigError = class extends Error {
     this.name = "AuthConfigError";
   }
 };
-function authEnv(name, fallbackDefault) {
-  const v = clean(process.env[name]);
-  if (v) return v;
-  return fallbackDefault;
+function getAuthSecret() {
+  const secret = clean(process.env.AUTH_SECRET);
+  if (secret) return secret;
+  if (IS_PROD()) {
+    throw new AuthConfigError("AUTH_SECRET environment variable is required in production");
+  }
+  return "dev_fallback_secret_key_minimum_32_characters_yana_travels";
 }
 function hmac(data) {
-  const secret = authEnv(
-    "AUTH_SECRET",
-    "yana_admin_production_auth_secret_stable_key_2026_yana_travels_min_32_chars"
-  );
+  const secret = getAuthSecret();
   return crypto.createHmac("sha256", secret).update(data).digest("base64url");
 }
 function safeEqual(a, b) {
-  const bufA = Buffer.from(a);
-  const bufB = Buffer.from(b);
+  const bufA = Buffer.from(a, "utf8");
+  const bufB = Buffer.from(b, "utf8");
   if (bufA.length !== bufB.length) return false;
   return crypto.timingSafeEqual(bufA, bufB);
 }
 function verifyCredentials(email, password) {
-  const e = authEnv("ADMIN_EMAIL", "admin@yanatravels.com");
-  const p = authEnv("ADMIN_PASSWORD", "admin123");
   if (!email || !password) return false;
+  const configuredEmail = clean(process.env.ADMIN_EMAIL) || (IS_PROD() ? "" : "admin@yanatravels.com");
+  const configuredPassword = clean(process.env.ADMIN_PASSWORD) || (IS_PROD() ? "" : "admin123");
+  if (!configuredEmail || !configuredPassword) {
+    throw new AuthConfigError("ADMIN_EMAIL and ADMIN_PASSWORD must be configured in environment");
+  }
   try {
-    return safeEqual(email.trim().toLowerCase(), e.trim().toLowerCase()) && safeEqual(password, p);
+    return safeEqual(email.trim().toLowerCase(), configuredEmail.trim().toLowerCase()) && safeEqual(password, configuredPassword);
   } catch {
     return false;
   }
@@ -207,47 +211,30 @@ function stripSslParams(url) {
   return url.replace(/([?&])sslmode=[^&]*&?/i, "$1").replace(/([?&])ssl=[^&]*&?/i, "$1").replace(/[?&]$/, "");
 }
 function createPool() {
-  const isVercel = Boolean(process.env.VERCEL || process.env.VERCEL_ENV);
-  const remoteDbIp = "168.119.64.101";
-  let connectionString = process.env.DATABASE_URL || process.env.POSTGRES_URL || process.env.POSTGRESQL_URL;
-  if (!connectionString) {
-    connectionString = `postgres://yanat710:5UwsNVK0RI0DGVsC4BOmR9cLP@${remoteDbIp}:5432/yanat710`;
-  } else if (isVercel && (connectionString.includes("127.0.0.1") || connectionString.includes("localhost"))) {
-    connectionString = connectionString.replace(/@(127\.0\.0\.1|localhost)(:\d+)?\//, `@${remoteDbIp}$2/`);
-  }
+  const connectionString = process.env.DATABASE_URL || process.env.POSTGRES_URL || process.env.POSTGRESQL_URL;
   let poolConfig;
   if (connectionString) {
-    let finalUrl = connectionString;
-    if (!isVercel) {
-      const hostOverride = process.env.DB_HOST_OVERRIDE;
-      if (hostOverride) {
-        finalUrl = finalUrl.replace(/@([^:/]+)(:\d+)?\//, `@${hostOverride}$2/`);
-      }
-    }
     poolConfig = {
-      connectionString: stripSslParams(finalUrl),
-      ssl: sslConfig(finalUrl),
+      connectionString: stripSslParams(connectionString),
+      ssl: sslConfig(connectionString),
       max: parseInt(process.env.DB_POOL_MAX || "10", 10),
       idleTimeoutMillis: 3e4,
       connectionTimeoutMillis: 1e4
     };
-  } else {
-    const host = process.env.DB_HOST || process.env.PGHOST || remoteDbIp;
-    const database = process.env.DB_NAME || process.env.PGDATABASE || "yanat710";
-    const user = process.env.DB_USER || process.env.PGUSER || "yanat710";
-    const password = process.env.DB_PASSWORD || process.env.PGPASSWORD || "5UwsNVK0RI0DGVsC4BOmR9cLP";
-    const port = parseInt(process.env.DB_PORT || process.env.PGPORT || "5432", 10);
+  } else if (process.env.DB_HOST && process.env.DB_NAME && process.env.DB_USER && process.env.DB_PASSWORD) {
     poolConfig = {
-      host,
-      port,
-      database,
-      user,
-      password,
+      host: process.env.DB_HOST,
+      port: parseInt(process.env.DB_PORT || "5432", 10),
+      database: process.env.DB_NAME,
+      user: process.env.DB_USER,
+      password: process.env.DB_PASSWORD,
       ssl: sslConfig(),
       max: parseInt(process.env.DB_POOL_MAX || "10", 10),
       idleTimeoutMillis: 3e4,
       connectionTimeoutMillis: 1e4
     };
+  } else {
+    return null;
   }
   const p = new Pool(poolConfig);
   p.on("error", (err) => {
@@ -261,7 +248,7 @@ if (process.env.NODE_ENV !== "production" && pool) {
 }
 function hasDb() {
   return Boolean(
-    process.env.DATABASE_URL || process.env.POSTGRES_URL || process.env.POSTGRESQL_URL || process.env.DB_NAME && process.env.DB_USER || pool
+    pool || process.env.DATABASE_URL || process.env.POSTGRES_URL || process.env.POSTGRESQL_URL || process.env.DB_HOST && process.env.DB_NAME && process.env.DB_USER && process.env.DB_PASSWORD
   );
 }
 async function query(text, params = []) {
@@ -288,7 +275,7 @@ async function queryStrict(text, params = []) {
   }
 }
 async function testDatabaseConnection() {
-  if (!pool) return { success: false, error: "not_configured" };
+  if (!pool) return { success: false, error: "Database connection is not configured (DATABASE_URL missing)" };
   const start = Date.now();
   try {
     const client = await pool.connect();
@@ -1057,14 +1044,16 @@ for (const p of [
 }
 dotenv2.config();
 var app = express();
-var IS_PROD = process.env.NODE_ENV === "production";
-var hasDbConfig = Boolean(
-  process.env.DATABASE_URL || process.env.DB_NAME && process.env.DB_USER || hasDb()
-);
+var IS_PROD2 = process.env.NODE_ENV === "production";
 var missingEnv = [];
-if (!hasDbConfig) missingEnv.push("DATABASE_URL");
+if (!process.env.DATABASE_URL && !(process.env.DB_HOST && process.env.DB_USER && process.env.DB_NAME)) {
+  missingEnv.push("DATABASE_URL");
+}
+if (!process.env.ADMIN_EMAIL) missingEnv.push("ADMIN_EMAIL");
+if (!process.env.ADMIN_PASSWORD) missingEnv.push("ADMIN_PASSWORD");
+if (!process.env.AUTH_SECRET) missingEnv.push("AUTH_SECRET");
 if (missingEnv.length) {
-  log[IS_PROD ? "error" : "warn"]("config.missing_env", { category: "config", missing: missingEnv });
+  log[IS_PROD2 ? "error" : "warn"]("config.missing_env", { category: "config", missing: missingEnv });
 }
 var trustProxy = process.env.TRUST_PROXY ?? "1";
 app.set("trust proxy", /^\d+$/.test(trustProxy) ? Number(trustProxy) : trustProxy);
@@ -1106,12 +1095,14 @@ app.use(
   })
 );
 app.use(express.json({ limit: "2mb" }));
-app.use((req, _res, next) => {
-  if (!req.url.startsWith("/api/") && (req.url.startsWith("/auth/") || req.url.startsWith("/packages") || req.url.startsWith("/admin/") || req.url.startsWith("/enquiries") || req.url.startsWith("/site-settings") || req.url.startsWith("/testimonials") || req.url.startsWith("/destinations") || req.url.startsWith("/health") || req.url.startsWith("/upload"))) {
-    req.url = `/api${req.url}`;
-  }
-  next();
-});
+if (process.env.VERCEL) {
+  app.use((req, _res, next) => {
+    if (!req.url.startsWith("/api/") && (req.url.startsWith("/auth/") || req.url.startsWith("/packages") || req.url.startsWith("/admin/") || req.url.startsWith("/enquiries") || req.url.startsWith("/site-settings") || req.url.startsWith("/testimonials") || req.url.startsWith("/destinations") || req.url.startsWith("/health") || req.url.startsWith("/upload"))) {
+      req.url = `/api${req.url}`;
+    }
+    next();
+  });
+}
 var publicDir = path2.resolve(__dirname, "..", "public");
 app.use(express.static(publicDir));
 var distDir = path2.resolve(__dirname, "..", "dist");
@@ -1121,7 +1112,7 @@ if (existsSync2(path2.join(distDir, "index.html"))) {
 var wrap = (fn) => (req, res) => {
   fn(req, res).catch((err) => {
     const e = err;
-    const isDbError = e instanceof DatabaseUnavailableError || e?.message?.toLowerCase().includes("database") || e?.message?.toLowerCase().includes("connect") || e?.message?.toLowerCase().includes("timeout") || e?.code === "ECONNREFUSED";
+    const isDbError = e instanceof DatabaseUnavailableError || e?.name === "DatabaseUnavailableError" || /database|connect|timeout|econnrefused|enotfound|password authentication/i.test(e?.message || "") || e?.code === "ECONNREFUSED" || e?.code === "ETIMEDOUT";
     const cfg = e instanceof AuthConfigError;
     log.error("api.error", {
       requestId: res.locals.requestId,
@@ -1129,11 +1120,15 @@ var wrap = (fn) => (req, res) => {
       path: req.path,
       category: isDbError ? "database_unavailable" : cfg ? "config" : "unexpected",
       message: e?.message,
-      stack: e?.stack
+      stack: IS_PROD2 ? void 0 : e?.stack
     });
     if (res.headersSent) return;
     if (cfg) {
-      res.status(503).json({ ok: false, error: "Server is not fully configured. Contact the site administrator.", requestId: res.locals.requestId });
+      res.status(503).json({
+        ok: false,
+        error: "Server configuration is incomplete. Contact the site administrator.",
+        requestId: res.locals.requestId
+      });
       return;
     }
     if (isDbError) {
@@ -1144,7 +1139,11 @@ var wrap = (fn) => (req, res) => {
       });
       return;
     }
-    res.status(500).json({ ok: false, error: e?.message || "Internal server error.", requestId: res.locals.requestId });
+    res.status(500).json({
+      ok: false,
+      error: IS_PROD2 ? "An unexpected server error occurred." : e?.message || "Internal server error.",
+      requestId: res.locals.requestId
+    });
   });
 };
 app.get("/api/health", (_req, res) => {
@@ -1174,7 +1173,42 @@ app.post(
       res.status(400).json({ ok: false, error: "Email and password are required." });
       return;
     }
-    if (!verifyCredentials(email, password)) {
+    if (hasDb()) {
+      const dbCheck = await pingDb();
+      if (!dbCheck.ok) {
+        log.error("auth.db_unreachable", {
+          requestId: res.locals.requestId,
+          category: "auth",
+          error: dbCheck.error
+        });
+        res.status(503).json({
+          ok: false,
+          error: "Database is temporarily unavailable. Please try again shortly.",
+          requestId: res.locals.requestId
+        });
+        return;
+      }
+    }
+    let isValid = false;
+    try {
+      isValid = verifyCredentials(email, password);
+    } catch (err) {
+      if (err instanceof AuthConfigError) {
+        log.error("auth.config_missing", {
+          requestId: res.locals.requestId,
+          category: "auth",
+          message: err.message
+        });
+        res.status(503).json({
+          ok: false,
+          error: "Authentication service is not properly configured. Contact the site administrator.",
+          requestId: res.locals.requestId
+        });
+        return;
+      }
+      throw err;
+    }
+    if (!isValid) {
       log.warn("auth.login_failed", { requestId: res.locals.requestId, category: "auth", ip: req.ip });
       res.status(401).json({ ok: false, error: "Invalid email or password." });
       return;

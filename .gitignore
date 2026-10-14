@@ -38,8 +38,10 @@ jar.txt
 # Transient image candidates used while sourcing stock imagery.
 docs/tmp-paris-cand-*.jpg
 
-# env files (can opt-in for committing if needed)
-.env*
+# env files (protect all environment files except .env.example)
+.env
+.env.*
+!.env.example
 
 # vercel
 .vercel
